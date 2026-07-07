@@ -9,6 +9,9 @@ export { inboundMessageSchema, outboundMessageSchema } from "./types";
 export { createEvolutionAdapter } from "./adapters/evolution";
 export type { EvolutionAdapterConfig } from "./adapters/evolution";
 
+export { createZapiAdapter } from "./adapters/zapi";
+export type { ZapiAdapterConfig } from "./adapters/zapi";
+
 export { createMetaCloudAdapter } from "./adapters/meta-cloud";
 export type { MetaCloudAdapterConfig } from "./adapters/meta-cloud";
 
