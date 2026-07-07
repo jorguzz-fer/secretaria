@@ -61,6 +61,12 @@ jobs:
 
       - name: Prisma validate
         run: node_modules/.bin/prisma validate --schema=packages/db/prisma/schema.prisma
+        env:
+          # O datasource referencia env(DATABASE_URL)/env(DIRECT_DATABASE_URL);
+          # `prisma validate` resolve essas refs, então precisam existir (valores
+          # placeholder bastam — nada conecta ao banco aqui).
+          DATABASE_URL: "postgresql://user:pass@localhost:5432/db"
+          DIRECT_DATABASE_URL: "postgresql://user:pass@localhost:5432/db"
 
       - name: Unit tests
         run: |
