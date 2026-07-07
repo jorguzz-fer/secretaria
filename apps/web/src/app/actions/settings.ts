@@ -5,6 +5,7 @@ import { prisma } from "@crm/db";
 import type { Role } from "@crm/db";
 import { requireRole, ROLES_ADMIN } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { encryptSecret } from "@crm/config/secrets";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { validatePassword } from "@/lib/password";
@@ -164,10 +165,27 @@ export async function updateTrackingConfigAction(
 
   const tenantId = session!.user.tenantId;
 
+  // Segredos são cifrados em repouso (AES-256-GCM). Só sobrescrevemos um segredo
+  // quando o usuário envia um valor novo não-vazio — a UI mostra máscara (nunca
+  // o texto puro), então um campo em branco significa "manter o valor atual".
+  const data: {
+    metaPixelId?: string;
+    metaAccessToken?: string;
+    hotmartHottok?: string;
+    pagarmeWebhookSecret?: string;
+  } = {};
+
+  // metaPixelId é um ID público (não segredo) — gravado em texto puro.
+  if (parsed.data.metaPixelId !== undefined) data.metaPixelId = parsed.data.metaPixelId;
+  if (parsed.data.metaAccessToken) data.metaAccessToken = encryptSecret(parsed.data.metaAccessToken);
+  if (parsed.data.hotmartHottok) data.hotmartHottok = encryptSecret(parsed.data.hotmartHottok);
+  if (parsed.data.pagarmeWebhookSecret)
+    data.pagarmeWebhookSecret = encryptSecret(parsed.data.pagarmeWebhookSecret);
+
   await prisma.tenantTrackingConfig.upsert({
     where: { tenantId },
-    create: { tenantId, ...parsed.data },
-    update: parsed.data,
+    create: { tenantId, ...data },
+    update: data,
   });
 
   await logAudit({
@@ -175,7 +193,8 @@ export async function updateTrackingConfigAction(
     userId: session!.user.id,
     action: "tracking_config.update",
     entity: "TenantTrackingConfig",
-    meta: { fields: Object.keys(parsed.data).filter((k) => parsed.data[k as keyof typeof parsed.data]) },
+    // Só os nomes dos campos alterados — nunca os valores (segredos).
+    meta: { fields: Object.keys(data) },
   });
 
   revalidatePath("/configuracoes/tracking");

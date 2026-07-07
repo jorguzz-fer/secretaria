@@ -26,6 +26,15 @@ export const paginationSchema = z.object({
 
 export type PaginationInput = z.infer<typeof paginationSchema>;
 
+// ─── Onboarding de tenant (Módulo 0) ──────────────────────────────────────────
+
+export const onboardTenantSchema = z.object({
+  name: z.string().min(2).max(100),
+  slug: slugSchema,
+});
+
+export type OnboardTenantInput = z.infer<typeof onboardTenantSchema>;
+
 // ─── CRM core ─────────────────────────────────────────────────────────────────
 
 export const leadStatusValues = ["NOVO", "EM_CONTATO", "QUALIFICADO", "DESQUALIFICADO", "CONVERTIDO"] as const;

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { getTrackingSecrets } from "@/lib/tenant-secrets";
+import { maskSecret } from "@crm/config/secrets";
 import { TrackingConfigForm } from "./TrackingConfigForm";
 import { BarChart2 } from "lucide-react";
 
@@ -14,15 +15,9 @@ export default async function TrackingSettingsPage() {
   const tenantId = session.user.tenantId;
   const isAdmin = ["SUPERADMIN", "ADMIN"].includes(session.user.role);
 
-  const config = await prisma.tenantTrackingConfig.findUnique({
-    where: { tenantId },
-    select: {
-      metaPixelId: true,
-      metaAccessToken: true,
-      hotmartHottok: true,
-      pagarmeWebhookSecret: true,
-    },
-  });
+  // Decifra server-side e envia ao client APENAS a máscara (••••1234) dos
+  // segredos — nunca o texto puro. metaPixelId não é segredo (ID público).
+  const secrets = await getTrackingSecrets(tenantId);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -40,10 +35,10 @@ export default async function TrackingSettingsPage() {
         </div>
       ) : (
         <TrackingConfigForm
-          metaPixelId={config?.metaPixelId ?? null}
-          metaAccessToken={config?.metaAccessToken ?? null}
-          hotmartHottok={config?.hotmartHottok ?? null}
-          pagarmeWebhookSecret={config?.pagarmeWebhookSecret ?? null}
+          metaPixelId={secrets.metaPixelId}
+          metaAccessTokenMask={maskSecret(secrets.metaAccessToken)}
+          hotmartHottokMask={maskSecret(secrets.hotmartHottok)}
+          pagarmeWebhookSecretMask={maskSecret(secrets.pagarmeWebhookSecret)}
           tenantId={tenantId}
         />
       )}

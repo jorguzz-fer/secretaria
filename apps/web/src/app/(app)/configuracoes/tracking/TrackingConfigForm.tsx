@@ -8,17 +8,25 @@ const L = "block text-sm font-medium mb-1";
 
 interface Props {
   metaPixelId: string | null;
-  metaAccessToken: string | null;
-  hotmartHottok: string | null;
-  pagarmeWebhookSecret: string | null;
+  // Máscaras dos segredos (••••1234) ou null quando não configurado. O texto
+  // puro nunca chega ao client — só a máscara, apenas para indicar "já existe".
+  metaAccessTokenMask: string | null;
+  hotmartHottokMask: string | null;
+  pagarmeWebhookSecretMask: string | null;
   tenantId: string;
+}
+
+// Placeholder de um campo de segredo: mostra a máscara se já houver valor
+// salvo (com dica de "deixe em branco para manter"), senão o exemplo padrão.
+function secretPlaceholder(mask: string | null, example: string): string {
+  return mask ? `${mask} — deixe em branco para manter` : example;
 }
 
 export function TrackingConfigForm({
   metaPixelId,
-  metaAccessToken,
-  hotmartHottok,
-  pagarmeWebhookSecret,
+  metaAccessTokenMask,
+  hotmartHottokMask,
+  pagarmeWebhookSecretMask,
   tenantId,
 }: Props) {
   const [state, action, pending] = useActionState(updateTrackingConfigAction, null);
@@ -45,8 +53,8 @@ export function TrackingConfigForm({
               id="metaAccessToken"
               name="metaAccessToken"
               type="password"
-              placeholder="EAAxxxxxxxx"
-              defaultValue={metaAccessToken ?? ""}
+              autoComplete="off"
+              placeholder={secretPlaceholder(metaAccessTokenMask, "EAAxxxxxxxx")}
               className={I}
             />
           </div>
@@ -67,8 +75,8 @@ export function TrackingConfigForm({
             id="hotmartHottok"
             name="hotmartHottok"
             type="password"
-            placeholder="seu-hottok-secreto"
-            defaultValue={hotmartHottok ?? ""}
+            autoComplete="off"
+            placeholder={secretPlaceholder(hotmartHottokMask, "seu-hottok-secreto")}
             className={I}
           />
         </div>
@@ -90,8 +98,8 @@ export function TrackingConfigForm({
             id="pagarmeWebhookSecret"
             name="pagarmeWebhookSecret"
             type="password"
-            placeholder="seu-webhook-secret"
-            defaultValue={pagarmeWebhookSecret ?? ""}
+            autoComplete="off"
+            placeholder={secretPlaceholder(pagarmeWebhookSecretMask, "seu-webhook-secret")}
             className={I}
           />
         </div>
