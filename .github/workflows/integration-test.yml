@@ -30,6 +30,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Histórico completo: `turbo test --filter=...[origin/main]` precisa
+          # resolver a ref origin/main (checkout raso quebra o filtro por SCM).
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 

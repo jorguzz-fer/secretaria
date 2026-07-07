@@ -54,7 +54,7 @@ function makeMessages(count: number, fromMe = false) {
     fromMe,
     body: `mensagem ${i + 1}`,
     timestamp: new Date(Date.now() + i * 60_000),
-  }));
+  })) as never;
 }
 
 describe("handleClassifyOnMessage", () => {
@@ -83,7 +83,7 @@ describe("handleClassifyOnMessage", () => {
     vi.mocked(prisma.whatsAppMessage.findMany).mockResolvedValueOnce([
       { fromMe: false, body: null, timestamp: new Date() },
       { fromMe: false, body: null, timestamp: new Date() },
-    ]);
+    ] as never);
 
     const result = await handleClassifyOnMessage(baseEvent);
     expect(result.skipped).toBe(true);
