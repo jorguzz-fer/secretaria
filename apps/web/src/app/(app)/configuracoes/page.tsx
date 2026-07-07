@@ -79,6 +79,25 @@ export default async function ConfiguracoesPage() {
         </section>
       )}
 
+      {/* Módulos */}
+      {isAdmin && (
+        <section className="space-y-4">
+          <h2 className="text-base font-semibold border-b border-border pb-2">Plataforma</h2>
+          <a
+            href="/configuracoes/modulos"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:bg-muted/30 transition-colors group"
+          >
+            <div>
+              <p className="font-medium text-sm">Módulos</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Ative/desative funcionalidades por cliente e ajuste a cadência de follow-up
+              </p>
+            </div>
+            <span className="text-muted-foreground group-hover:text-foreground transition-colors text-lg">→</span>
+          </a>
+        </section>
+      )}
+
       {/* WhatsApp */}
       {isAdmin && (
         <section className="space-y-4">

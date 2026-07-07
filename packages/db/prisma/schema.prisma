@@ -43,6 +43,7 @@ model Tenant {
   conversionEvents ConversionEvent[]
   trackingConfig   TenantTrackingConfig?
   campaignSpends   CampaignSpend[]
+  modules          TenantModule[]
 
   @@index([slug])
 }
@@ -737,6 +738,28 @@ model TenantTrackingConfig {
   updatedAt             DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Módulo 0: camada de configuração por tenant ─────────────────────────────
+
+// Toggle + config por (tenant, módulo). `moduleKey` corresponde a uma
+// ModuleKey do registro em `@crm/config`. `enabled` sobrescreve o
+// `defaultEnabled` do registro; `settings` guarda a config específica do
+// módulo (validada por Zod na borda da aplicação — nunca segredos, que ficam
+// em colunas dedicadas e cifradas, ex.: TenantTrackingConfig).
+model TenantModule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  moduleKey String
+  enabled   Boolean
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleKey])
+  @@index([tenantId])
 }
 
 model CampaignSpend {

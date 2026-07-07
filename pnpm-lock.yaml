@@ -29,6 +29,9 @@ importers:
       '@crm/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@crm/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@crm/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -224,6 +227,22 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@8.0.9(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))
 
+  packages/config:
+    dependencies:
+      '@crm/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.4
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@8.0.9(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.1)(yaml@2.8.3))
+
   packages/db:
     dependencies:
       '@prisma/client':
@@ -242,6 +261,9 @@ importers:
       '@crm/ai':
         specifier: workspace:*
         version: link:../ai
+      '@crm/config':
+        specifier: workspace:*
+        version: link:../config
       '@crm/db':
         specifier: workspace:*
         version: link:../db

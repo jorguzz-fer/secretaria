@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { parsePagarme, verifyPagarmeSignature } from "@crm/tracking/webhooks";
 import { stitchPaymentToLead } from "@crm/tracking/attribution";
 import { logAudit, getClientIp } from "@/lib/audit";
+import { getTrackingSecrets } from "@/lib/tenant-secrets";
 
 export async function POST(req: Request): Promise<NextResponse> {
   const rawBody = await req.text();
@@ -14,16 +14,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Missing tenant" }, { status: 400 });
   }
 
-  const config = await prisma.tenantTrackingConfig.findUnique({
-    where: { tenantId },
-    select: { pagarmeWebhookSecret: true },
-  });
+  const secrets = await getTrackingSecrets(tenantId);
 
-  if (!config?.pagarmeWebhookSecret) {
+  if (!secrets.pagarmeWebhookSecret) {
     return NextResponse.json({ error: "Tenant not configured" }, { status: 400 });
   }
 
-  const verify = verifyPagarmeSignature(headers, rawBody, config.pagarmeWebhookSecret);
+  const verify = verifyPagarmeSignature(headers, rawBody, secrets.pagarmeWebhookSecret);
   if (!verify.valid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

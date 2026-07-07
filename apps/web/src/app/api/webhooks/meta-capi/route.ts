@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { sendMetaCapiEvent } from "@crm/tracking/server";
 import { requireAuth } from "@/lib/authz";
 import { logAudit, getClientIp } from "@/lib/audit";
+import { getTrackingSecrets } from "@/lib/tenant-secrets";
 import { z } from "zod";
 
 const payloadSchema = z.object({
@@ -40,18 +40,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const config = await prisma.tenantTrackingConfig.findUnique({
-    where: { tenantId },
-    select: { metaPixelId: true, metaAccessToken: true },
-  });
+  const secrets = await getTrackingSecrets(tenantId);
 
-  if (!config?.metaPixelId || !config?.metaAccessToken) {
+  if (!secrets.metaPixelId || !secrets.metaAccessToken) {
     return NextResponse.json({ error: "Meta CAPI not configured for tenant" }, { status: 400 });
   }
 
   const result = await sendMetaCapiEvent(parsed.data, {
-    pixelId: config.metaPixelId,
-    accessToken: config.metaAccessToken,
+    pixelId: secrets.metaPixelId,
+    accessToken: secrets.metaAccessToken,
   });
 
   await logAudit({

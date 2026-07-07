@@ -1,11 +1,12 @@
 {
-  "name": "@crm/jobs",
+  "name": "@crm/config",
   "version": "0.1.0",
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./events": "./src/events.ts",
-    "./client": "./src/client.ts"
+    "./modules": "./src/modules.ts",
+    "./secrets": "./src/secrets.ts",
+    "./resolve": "./src/resolve.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,11 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@crm/ai": "workspace:*",
-    "@crm/config": "workspace:*",
     "@crm/db": "workspace:*",
-    "@crm/whatsapp": "workspace:*",
-    "inngest": "^3.28.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

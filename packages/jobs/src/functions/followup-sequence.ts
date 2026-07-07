@@ -1,15 +1,32 @@
 import { prisma } from "@crm/db";
 import { generateFollowUp } from "@crm/ai";
 import { createEvolutionAdapter } from "@crm/whatsapp";
+import { resolveModule, isModuleEnabled } from "@crm/config";
 import { inngest } from "../client";
 import type { EventData } from "../events";
 
-// D+1, D+3, D+7 from first contact — 3 attempts max before escalation
-const SEQUENCE_DAYS = [1, 3, 7] as const;
+// Módulo do follow-up no registro de config. A cadência (dias) e o toggle
+// vêm de `getTenantConfig`/`isModuleEnabled` — não mais de constante global.
+const FOLLOWUP_MODULE = "recuperacao" as const;
+
+// Fallback quando a config não resolve (não deve ocorrer: o schema tem default).
+const DEFAULT_SEQUENCE_DAYS = [1, 3, 7];
 
 export type FollowupResult =
   | { skipped: true; reason: string }
   | { skipped: false; shouldEscalate: boolean; nextAttemptHours: number | null };
+
+/**
+ * Resolve o plano de follow-up do tenant: se o módulo está habilitado e a
+ * cadência de dias configurada. Usado pela função Inngest para agendar os
+ * `step.sleep` e decidir se roda.
+ */
+export async function resolveFollowupPlan(
+  tenantId: string,
+): Promise<{ enabled: boolean; sequenceDays: number[] }> {
+  const { enabled, config } = await resolveModule(tenantId, FOLLOWUP_MODULE);
+  return { enabled, sequenceDays: config.sequenceDays ?? DEFAULT_SEQUENCE_DAYS };
+}
 
 export async function handleFollowup(
   eventData: Partial<EventData<"followup/scheduled">> & {
@@ -20,6 +37,11 @@ export async function handleFollowup(
   attempt: number,
 ): Promise<FollowupResult> {
   const { tenantId, leadId } = eventData;
+
+  // Gate: módulo desligado para o tenant → não roda, sem efeitos colaterais.
+  if (!(await isModuleEnabled(tenantId, FOLLOWUP_MODULE))) {
+    return { skipped: true, reason: "module_disabled" };
+  }
 
   // Load conversation with lead + instance info
   const conversation = await prisma.whatsAppConversation.findFirst({
@@ -120,15 +142,23 @@ export const followupSequenceFn = inngest.createFunction(
   async ({ event, step }) => {
     const { data } = event;
 
-    for (let i = 0; i < SEQUENCE_DAYS.length; i++) {
+    // Resolve cadência + toggle do tenant (config por tenant, não constante).
+    const plan = await step.run("resolve-plan", () => resolveFollowupPlan(data.tenantId));
+    if (!plan.enabled) {
+      return { skipped: true, reason: "module_disabled" };
+    }
+
+    const sequenceDays = plan.sequenceDays;
+
+    for (let i = 0; i < sequenceDays.length; i++) {
       const attempt = i + 1;
 
       // Sleep until next follow-up day (relative to previous step)
       if (i === 0) {
-        await step.sleep(`wait-d${SEQUENCE_DAYS[i]}`, `${SEQUENCE_DAYS[i] * 24}h`);
+        await step.sleep(`wait-d${sequenceDays[i]}`, `${sequenceDays[i] * 24}h`);
       } else {
-        const waitDays = SEQUENCE_DAYS[i] - SEQUENCE_DAYS[i - 1];
-        await step.sleep(`wait-d${SEQUENCE_DAYS[i]}`, `${waitDays * 24}h`);
+        const waitDays = sequenceDays[i] - sequenceDays[i - 1];
+        await step.sleep(`wait-d${sequenceDays[i]}`, `${waitDays * 24}h`);
       }
 
       const result = await step.run(`attempt-${attempt}`, () =>

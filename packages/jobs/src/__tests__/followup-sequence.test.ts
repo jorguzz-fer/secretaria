@@ -20,6 +20,14 @@ vi.mock("@crm/whatsapp", () => ({
   })),
 }));
 
+vi.mock("@crm/config", () => ({
+  isModuleEnabled: vi.fn().mockResolvedValue(true),
+  resolveModule: vi.fn().mockResolvedValue({
+    enabled: true,
+    config: { sequenceDays: [1, 3, 7], stopOnReply: true },
+  }),
+}));
+
 vi.mock("../client", () => ({
   inngest: {
     send: vi.fn(),
@@ -27,9 +35,10 @@ vi.mock("../client", () => ({
   },
 }));
 
-import { handleFollowup } from "../functions/followup-sequence";
+import { handleFollowup, resolveFollowupPlan } from "../functions/followup-sequence";
 import { prisma } from "@crm/db";
 import { generateFollowUp } from "@crm/ai";
+import { isModuleEnabled, resolveModule } from "@crm/config";
 import { inngest } from "../client";
 
 const baseEvent = {
@@ -70,6 +79,13 @@ describe("handleFollowup", () => {
     vi.mocked(prisma.whatsAppMessage.create).mockReset();
     vi.mocked(generateFollowUp).mockReset();
     vi.mocked(inngest.send).mockReset();
+    vi.mocked(isModuleEnabled).mockReset();
+    vi.mocked(isModuleEnabled).mockResolvedValue(true);
+    vi.mocked(resolveModule).mockReset();
+    vi.mocked(resolveModule).mockResolvedValue({
+      enabled: true,
+      config: { sequenceDays: [1, 3, 7], stopOnReply: true },
+    } as never);
   });
 
   it("retorna skipped=true quando lead não tem conversa WA ativa", async () => {
@@ -169,6 +185,25 @@ describe("handleFollowup", () => {
     );
   });
 
+  it("gate: módulo 'recuperacao' desligado → skipped=module_disabled sem efeitos colaterais", async () => {
+    vi.mocked(isModuleEnabled).mockResolvedValueOnce(false);
+
+    const result = await handleFollowup(baseEvent, 1);
+
+    expect(result.skipped).toBe(true);
+    if (result.skipped) expect(result.reason).toBe("module_disabled");
+    // Não toca conversa, não gera IA, não grava mensagem.
+    expect(prisma.whatsAppConversation.findFirst).not.toHaveBeenCalled();
+    expect(generateFollowUp).not.toHaveBeenCalled();
+    expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("checa o toggle scoped por tenantId derivado do evento", async () => {
+    vi.mocked(isModuleEnabled).mockResolvedValueOnce(false);
+    await handleFollowup({ ...baseEvent, tenantId: "tenant-Z" }, 1);
+    expect(isModuleEnabled).toHaveBeenCalledWith("tenant-Z", "recuperacao");
+  });
+
   it("propaga erro do AI SDK sem engolir", async () => {
     vi.mocked(prisma.whatsAppConversation.findFirst).mockResolvedValueOnce(
       mockConversation as never,
@@ -178,5 +213,33 @@ describe("handleFollowup", () => {
 
     await expect(handleFollowup(baseEvent, 1)).rejects.toThrow(/AI timeout/);
     expect(prisma.whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveFollowupPlan", () => {
+  beforeEach(() => {
+    vi.mocked(resolveModule).mockReset();
+  });
+
+  it("lê a cadência configurada do tenant (não a constante [1,3,7])", async () => {
+    vi.mocked(resolveModule).mockResolvedValueOnce({
+      enabled: true,
+      config: { sequenceDays: [2, 5, 12], stopOnReply: true },
+    } as never);
+
+    const plan = await resolveFollowupPlan("tenant-custom");
+
+    expect(resolveModule).toHaveBeenCalledWith("tenant-custom", "recuperacao");
+    expect(plan).toEqual({ enabled: true, sequenceDays: [2, 5, 12] });
+  });
+
+  it("reflete o toggle desabilitado do tenant", async () => {
+    vi.mocked(resolveModule).mockResolvedValueOnce({
+      enabled: false,
+      config: { sequenceDays: [1, 3, 7], stopOnReply: true },
+    } as never);
+
+    const plan = await resolveFollowupPlan("tenant-off");
+    expect(plan.enabled).toBe(false);
   });
 });
