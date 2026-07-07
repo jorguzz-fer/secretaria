@@ -1,58 +1,85 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { createEvolutionAdapter, handleWebhook } from "@crm/whatsapp";
+import {
+  createEvolutionAdapter,
+  createZapiAdapter,
+  detectProvider,
+  handleWebhook,
+  type WhatsAppAdapter,
+} from "@crm/whatsapp";
 import { inngest } from "@crm/jobs";
+import { mirrorInboundToChatwoot } from "@/lib/chatwoot";
 
 /**
  * POST /api/webhooks/whatsapp
  *
- * Receptor para Evolution API e Z-API.
- * Verificação + parsing delegados ao adapter @crm/whatsapp.
- * Esta rota cuida de: lookup tenant → dedup DB → persistência conversa.
- * TODO Fase 3: emitir inngest event `message/received` após persistência.
+ * Receptor unificado para Evolution API e Z-API. O provedor é detectado pelo
+ * formato do payload; verificação + parsing são delegados ao adapter
+ * @crm/whatsapp. Esta rota cuida de: lookup tenant → dedup DB → persistência
+ * → evento Inngest → espelho no Chatwoot (opção "a": app recebe, Chatwoot é cópia).
  */
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const headers = Object.fromEntries(req.headers.entries());
 
-  // Extrai instanceName para lookup
-  let instanceName: string | undefined;
-  let parsedEvent: string | undefined;
-  let parsedData: unknown;
+  const detected = detectProvider(rawBody);
+  if (!detected) return NextResponse.json({ ok: true });
+
+  let body: Record<string, unknown>;
   try {
-    const b = JSON.parse(rawBody) as Record<string, unknown>;
-    instanceName = b.instance as string | undefined;
-    parsedEvent = (b.event as string | undefined)?.toUpperCase().replace(".", "_");
-    parsedData = b.data;
+    body = JSON.parse(rawBody) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ ok: true });
   }
 
-  if (!instanceName) return NextResponse.json({ ok: true });
-
   const instance = await prisma.whatsAppInstance.findUnique({
-    where: { instanceName },
+    where: { instanceName: detected.instanceKey },
     select: { id: true, tenantId: true, phone: true },
   });
   if (!instance) return NextResponse.json({ ok: true });
 
-  // Eventos de sistema (connection + QR) tratados diretamente
-  if (parsedEvent === "CONNECTION_UPDATE") {
-    await handleConnectionUpdate(instanceName, parsedData);
-    return NextResponse.json({ ok: true });
-  }
-  if (parsedEvent === "QRCODE_UPDATED") {
-    await handleQrcodeUpdated(instanceName, parsedData);
-    return NextResponse.json({ ok: true });
-  }
+  let adapter: WhatsAppAdapter;
+  let secret: string;
 
-  const secret = process.env.EVOLUTION_WEBHOOK_SECRET ?? "";
-  const adapter = createEvolutionAdapter({
-    baseUrl: process.env.EVOLUTION_API_URL ?? "",
-    apiKey: secret,
-    instanceName,
-    instancePhone: instance.phone ?? "+5500000000000",
-  });
+  if (detected.provider === "zapi") {
+    const type = body.type as string | undefined;
+
+    // Callbacks de sistema do Z-API
+    if (type === "ConnectedCallback" || type === "DisconnectedCallback") {
+      await updateZapiConnection(detected.instanceKey, type);
+      return NextResponse.json({ ok: true });
+    }
+    // Só processa mensagens recebidas; ignora status/delivery/presence/etc.
+    if (type !== "ReceivedCallback") return NextResponse.json({ ok: true });
+
+    secret = process.env.ZAPI_CLIENT_TOKEN ?? "";
+    adapter = createZapiAdapter({
+      instanceId: detected.instanceKey,
+      instanceToken: process.env.ZAPI_INSTANCE_TOKEN ?? "",
+      clientToken: secret,
+      instancePhone: instance.phone ?? "+5500000000000",
+      baseUrl: process.env.ZAPI_BASE_URL,
+    });
+  } else {
+    const parsedEvent = (body.event as string | undefined)?.toUpperCase().replace(".", "_");
+
+    if (parsedEvent === "CONNECTION_UPDATE") {
+      await handleConnectionUpdate(detected.instanceKey, body.data);
+      return NextResponse.json({ ok: true });
+    }
+    if (parsedEvent === "QRCODE_UPDATED") {
+      await handleQrcodeUpdated(detected.instanceKey, body.data);
+      return NextResponse.json({ ok: true });
+    }
+
+    secret = process.env.EVOLUTION_WEBHOOK_SECRET ?? "";
+    adapter = createEvolutionAdapter({
+      baseUrl: process.env.EVOLUTION_API_URL ?? "",
+      apiKey: secret,
+      instanceName: detected.instanceKey,
+      instancePhone: instance.phone ?? "+5500000000000",
+    });
+  }
 
   const result = await handleWebhook({
     adapter,
@@ -64,9 +91,8 @@ export async function POST(req: Request) {
 
   if (result.status !== 200) {
     if (result.status === 401)
-      console.warn("[webhook/whatsapp] assinatura inválida, instância:", instanceName);
-    else
-      console.error("[webhook/whatsapp] erro interno");
+      console.warn("[webhook/whatsapp] assinatura inválida, instância:", detected.instanceKey);
+    else console.error("[webhook/whatsapp] erro interno");
     return NextResponse.json({ ok: true });
   }
 
@@ -173,9 +199,37 @@ export async function POST(req: Request) {
         receivedAt: msg.receivedAt.toISOString(),
       },
     });
+
+    // Espelha no Chatwoot (best-effort; no-op se CHATWOOT_* não configurado).
+    const mirrorContent =
+      msg.message.type === "text"
+        ? msg.message.text
+        : "caption" in msg.message && msg.message.caption
+          ? msg.message.caption
+          : `[${msg.message.type}]`;
+    const mirror = await mirrorInboundToChatwoot({
+      fromPhoneE164: msg.from.phoneE164,
+      fromName: msg.from.name ?? null,
+      content: mirrorContent,
+      externalMessageId: msg.externalMessageId,
+    });
+    if (mirror.status === "failed") {
+      console.warn("[webhook/whatsapp] espelho Chatwoot falhou:", mirror.error);
+    }
   }
 
   return NextResponse.json({ ok: true });
+}
+
+async function updateZapiConnection(
+  instanceName: string,
+  type: "ConnectedCallback" | "DisconnectedCallback",
+) {
+  const status = type === "ConnectedCallback" ? "CONNECTED" : "DISCONNECTED";
+  await prisma.whatsAppInstance.updateMany({
+    where: { instanceName },
+    data: { status, updatedAt: new Date() },
+  });
 }
 
 async function handleConnectionUpdate(instanceName: string, data: unknown) {
