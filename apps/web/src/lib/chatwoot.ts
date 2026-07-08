@@ -49,6 +49,48 @@ export function isChatwootConfigured(): boolean {
   return readConfig() !== null;
 }
 
+/**
+ * Interpreta um evento de webhook do Chatwoot e decide se representa um
+ * **humano assumindo** a conversa (→ pausar a IA). Retorna o telefone do
+ * contato quando sim; `null` caso contrário.
+ *
+ * Regra (gatilho 1 da Escalada): pausa quando um AGENTE HUMANO envia uma
+ * mensagem `outgoing` (não nota interna, não bot). Mensagens `incoming` (do
+ * lead) e de `agent_bot` são ignoradas.
+ *
+ * ⚠️ Shape conforme docs do Chatwoot; confirmar contra payload real. Parsing
+ * defensivo — formato inesperado → null.
+ */
+export function parseChatwootTakeover(body: unknown): { contactPhone: string } | null {
+  if (!body || typeof body !== "object") return null;
+  const p = body as Record<string, unknown>;
+
+  if (p.event !== "message_created") return null;
+  if (p.message_type !== "outgoing") return null; // só resposta de saída
+  if (p.private === true) return null; // nota interna, não é atendimento
+
+  // Ignora mensagens de bot/automação — só humano conta como hand-off.
+  const sender = p.sender as Record<string, unknown> | undefined;
+  const senderType = typeof sender?.type === "string" ? (sender.type as string) : undefined;
+  if (senderType && senderType !== "user") return null;
+
+  // Telefone do contato: tenta os caminhos usuais do payload do Chatwoot.
+  const conversation = p.conversation as Record<string, unknown> | undefined;
+  const meta = conversation?.meta as Record<string, unknown> | undefined;
+  const metaSender = meta?.sender as Record<string, unknown> | undefined;
+  const contact = p.contact as Record<string, unknown> | undefined;
+
+  const raw =
+    (typeof metaSender?.phone_number === "string" && metaSender.phone_number) ||
+    (typeof contact?.phone_number === "string" && contact.phone_number) ||
+    "";
+
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 15) return null;
+
+  return { contactPhone: digits };
+}
+
 function apiBase(cfg: ChatwootConfig): string {
   return `${cfg.url}/api/v1/accounts/${cfg.accountId}`;
 }
