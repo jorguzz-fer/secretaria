@@ -17,3 +17,6 @@ export type { MetaCloudAdapterConfig } from "./adapters/meta-cloud";
 
 export { handleWebhook } from "./webhooks";
 export type { HandleWebhookInput, HandleWebhookResult } from "./webhooks";
+
+export { detectProvider } from "./detect";
+export type { DetectedProvider } from "./detect";
