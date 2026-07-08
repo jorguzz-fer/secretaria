@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mirrorInboundToChatwoot, isChatwootConfigured } from "@/lib/chatwoot";
+import {
+  mirrorInboundToChatwoot,
+  isChatwootConfigured,
+  parseChatwootTakeover,
+} from "@/lib/chatwoot";
 
 const ENV = {
   CHATWOOT_URL: "https://chat.example.com",
@@ -108,5 +112,55 @@ describe("mirrorInboundToChatwoot", () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response("boom", { status: 500 }));
     const res = await mirrorInboundToChatwoot(INPUT);
     expect(res.status).toBe("failed");
+  });
+});
+
+describe("parseChatwootTakeover", () => {
+  const outgoingHuman = {
+    event: "message_created",
+    message_type: "outgoing",
+    private: false,
+    sender: { type: "user" },
+    conversation: { meta: { sender: { phone_number: "+55 11 99999-0000" } } },
+  };
+
+  it("humano respondendo (outgoing) → devolve telefone normalizado", () => {
+    expect(parseChatwootTakeover(outgoingHuman)).toEqual({ contactPhone: "5511999990000" });
+  });
+
+  it("pega telefone de contact.phone_number como fallback", () => {
+    const r = parseChatwootTakeover({
+      ...outgoingHuman,
+      conversation: undefined,
+      contact: { phone_number: "5511988887777" },
+    });
+    expect(r).toEqual({ contactPhone: "5511988887777" });
+  });
+
+  it("ignora mensagem incoming (do lead)", () => {
+    expect(parseChatwootTakeover({ ...outgoingHuman, message_type: "incoming" })).toBeNull();
+  });
+
+  it("ignora nota interna (private)", () => {
+    expect(parseChatwootTakeover({ ...outgoingHuman, private: true })).toBeNull();
+  });
+
+  it("ignora mensagem de bot (sender.type != user)", () => {
+    expect(parseChatwootTakeover({ ...outgoingHuman, sender: { type: "agent_bot" } })).toBeNull();
+  });
+
+  it("ignora evento que não é message_created", () => {
+    expect(parseChatwootTakeover({ ...outgoingHuman, event: "conversation_updated" })).toBeNull();
+  });
+
+  it("null quando telefone ausente/inválido", () => {
+    expect(
+      parseChatwootTakeover({ ...outgoingHuman, conversation: { meta: { sender: {} } }, contact: undefined }),
+    ).toBeNull();
+  });
+
+  it("null para corpo não-objeto", () => {
+    expect(parseChatwootTakeover(null)).toBeNull();
+    expect(parseChatwootTakeover("x")).toBeNull();
   });
 });
