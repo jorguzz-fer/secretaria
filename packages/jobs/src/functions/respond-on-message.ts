@@ -3,9 +3,11 @@ import { generateReply } from "@crm/ai";
 import { isModuleEnabled } from "@crm/config";
 import { inngest } from "../client";
 import { resolveWhatsappAdapter } from "../whatsapp-adapter";
+import { tryScheduling } from "./schedule";
 
 // Módulo do SDR (secretária) no registro de config. Desligado → não responde.
 const SDR_MODULE = "secretaria" as const;
+const SCHEDULE_MODULE = "agenda" as const;
 
 export interface RespondInput {
   tenantId: string;
@@ -78,10 +80,50 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
     return { skipped: true, reason: "no_inbound" };
   }
 
+  const leadName = conversation.lead?.name ?? conversation.remoteName ?? "amigo(a)";
+  const adapter = resolveWhatsappAdapter(conversation.instance);
+
+  async function sendAndPersist(text: string, tag: string): Promise<void> {
+    await adapter.sendMessage({
+      tenantId,
+      providerInstanceId: conversation!.instance.instanceName,
+      toPhoneE164: toPhone!,
+      content: { type: "text", text },
+      externalEventId: `${tag}-${conversation!.id}-${eventData.messageId ?? "unknown"}`,
+    });
+    await prisma.whatsAppMessage.create({
+      data: {
+        tenantId,
+        conversationId: conversation!.id,
+        waMessageId: `${tag}-${conversation!.id}-${Date.now()}`,
+        fromMe: true,
+        body: text,
+        mediaType: "TEXT",
+        status: "SENT",
+        timestamp: new Date(),
+      },
+    });
+  }
+
+  // Agenda: se o módulo estiver ligado, a IA pode propor/confirmar horários.
+  if (await isModuleEnabled(tenantId, SCHEDULE_MODULE)) {
+    const sched = await tryScheduling({
+      tenantId,
+      conversationId: conversation.id,
+      leadId: conversation.lead?.id,
+      leadName,
+      history,
+    });
+    if (sched.handled) {
+      await sendAndPersist(sched.replyText, "sched");
+      return { skipped: false, escalated: false, message: sched.replyText };
+    }
+  }
+
   const reply = await generateReply({
     tenantId,
     leadId: conversation.lead?.id,
-    leadName: conversation.lead?.name ?? conversation.remoteName ?? "amigo(a)",
+    leadName,
     channel: "whatsapp",
     messages: history,
   });
@@ -99,28 +141,7 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
     return { skipped: false, escalated: true };
   }
 
-  const adapter = resolveWhatsappAdapter(conversation.instance);
-  await adapter.sendMessage({
-    tenantId,
-    providerInstanceId: conversation.instance.instanceName,
-    toPhoneE164: toPhone,
-    content: { type: "text", text: reply.message },
-    externalEventId: `sdr-reply-${conversation.id}-${eventData.messageId ?? "unknown"}`,
-  });
-
-  await prisma.whatsAppMessage.create({
-    data: {
-      tenantId,
-      conversationId: conversation.id,
-      waMessageId: `reply-${conversation.id}-${Date.now()}`,
-      fromMe: true,
-      body: reply.message,
-      mediaType: "TEXT",
-      status: "SENT",
-      timestamp: new Date(),
-    },
-  });
-
+  await sendAndPersist(reply.message, "sdr-reply");
   return { skipped: false, escalated: false, message: reply.message };
 }
 

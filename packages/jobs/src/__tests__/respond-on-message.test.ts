@@ -13,6 +13,8 @@ vi.mock("@crm/ai", () => ({ generateReply: vi.fn() }));
 
 vi.mock("@crm/config", () => ({ isModuleEnabled: vi.fn() }));
 
+vi.mock("../functions/schedule", () => ({ tryScheduling: vi.fn() }));
+
 vi.mock("@crm/whatsapp", () => ({
   createEvolutionAdapter: vi.fn(() => ({
     provider: "evolution",
@@ -36,7 +38,9 @@ import { handleRespondOnMessage } from "../functions/respond-on-message";
 import { prisma } from "@crm/db";
 import { generateReply } from "@crm/ai";
 import { isModuleEnabled } from "@crm/config";
+import { tryScheduling } from "../functions/schedule";
 
+const sched = vi.mocked(tryScheduling);
 const findFirst = vi.mocked(prisma.whatsAppConversation.findFirst);
 const updateConv = vi.mocked(prisma.whatsAppConversation.update);
 const findMany = vi.mocked(prisma.whatsAppMessage.findMany);
@@ -70,6 +74,7 @@ const history = [{ fromMe: false, body: "Qual o valor?", timestamp: new Date() }
 beforeEach(() => {
   vi.clearAllMocks();
   modEnabled.mockResolvedValue(true);
+  sched.mockResolvedValue({ handled: false } as never);
   findFirst.mockResolvedValue(mockConversation as never);
   findMany.mockResolvedValue(history as never);
   createMsg.mockResolvedValue({} as never);
@@ -146,6 +151,26 @@ describe("handleRespondOnMessage", () => {
       expect.objectContaining({
         data: expect.objectContaining({ fromMe: true, body: expect.any(String) }),
       }),
+    );
+    expect(res).toMatchObject({ skipped: false, escalated: false });
+  });
+
+  it("agenda: quando tryScheduling trata, envia a resposta de agenda e NÃO gera reply genérico", async () => {
+    sched.mockResolvedValueOnce({
+      handled: true,
+      replyText: "Tenho estes horários:\n1) seg, 07/07 09:00",
+    } as never);
+
+    const res = await handleRespondOnMessage(baseEvent);
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: { type: "text", text: expect.stringContaining("horários") },
+      }),
+    );
+    expect(genReply).not.toHaveBeenCalled();
+    expect(createMsg).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ fromMe: true }) }),
     );
     expect(res).toMatchObject({ skipped: false, escalated: false });
   });
