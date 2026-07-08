@@ -58,9 +58,24 @@ export type EscalationConfig = z.infer<typeof EscalationConfigSchema>;
 
 export const ScheduleConfigSchema = z
   .object({
+    // IANA timezone usada para calcular horário comercial e slots.
+    timezone: z.string().min(1).max(64).default("America/Sao_Paulo"),
+    // Duração de cada reunião/slot (min).
     slotMinutes: z.number().int().min(5).max(240).default(30),
+    // Dias úteis (0=domingo … 6=sábado).
+    workdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).default([1, 2, 3, 4, 5]),
+    // Janela de horário comercial (hora local, 0-24). start < end.
+    startHour: z.number().int().min(0).max(23).default(9),
+    endHour: z.number().int().min(1).max(24).default(18),
+    // Antecedência mínima (h) entre "agora" e um slot ofertável.
+    leadTimeHours: z.number().int().min(0).max(168).default(2),
+    // Quantos dias à frente ofertar.
+    horizonDays: z.number().int().min(1).max(60).default(7),
+    // Quantos horários sugerir por vez.
+    suggestions: z.number().int().min(1).max(5).default(3),
   })
-  .strict();
+  .strict()
+  .refine((c) => c.endHour > c.startHour, "endHour deve ser maior que startHour");
 export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 
 // ─── cobranca (Asaas) ─────────────────────────────────────────────────────────
