@@ -44,6 +44,7 @@ model Tenant {
   trackingConfig   TenantTrackingConfig?
   campaignSpends   CampaignSpend[]
   modules          TenantModule[]
+  appointments     Appointment[]
 
   @@index([slug])
 }
@@ -255,6 +256,7 @@ model Lead {
   opportunities   Opportunity[]
   followUpAlerts  AiFollowUpAlert[]
   waConversations WhatsAppConversation[]
+  appointments    Appointment[]
   attribution     Attribution?
 
   @@index([tenantId, status])
@@ -765,6 +767,37 @@ model TenantModule {
 
   @@unique([tenantId, moduleKey])
   @@index([tenantId])
+}
+
+// ─── Agenda: agendamentos (interno + espelho Google Calendar) ────────────────
+
+enum AppointmentStatus {
+  PROPOSED   // sugerido/aguardando confirmação
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  tenantId       String
+  leadId         String?
+  conversationId String?
+  userId         String?           // vendedor responsável (opcional)
+  title          String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         AppointmentStatus @default(PROPOSED)
+  source         String            @default("ai") // "ai" | "human"
+  googleEventId  String?           // preenchido quando espelhado no Google (parte 2)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead?  @relation(fields: [leadId], references: [id])
+
+  @@index([tenantId, startsAt])
+  @@index([tenantId, leadId])
 }
 
 model CampaignSpend {

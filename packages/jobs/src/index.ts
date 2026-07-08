@@ -15,6 +15,9 @@ export * from "./events";
 export { resolveWhatsappAdapter } from "./whatsapp-adapter";
 export type { InstanceForAdapter } from "./whatsapp-adapter";
 
+export { suggestSlots } from "./scheduling";
+export type { TimeRange, SuggestSlotsInput } from "./scheduling";
+
 export { classifyOnMessageFn, handleClassifyOnMessage };
 export { firstContactFn, handleFirstContact };
 export { followupSequenceFn, handleFollowup, resolveFollowupPlan };
