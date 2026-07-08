@@ -7,6 +7,7 @@ import {
 } from "./functions/followup-sequence";
 import { autoAssignLeadFn, reAssignHotLeadFn, handleAutoAssign, handleReAssignHot } from "./functions/auto-assign";
 import { respondOnMessageFn, handleRespondOnMessage } from "./functions/respond-on-message";
+import { escalateOnClassifiedFn, handleEscalateOnClassified } from "./functions/escalate-on-classified";
 
 export { inngest } from "./client";
 export * from "./events";
@@ -19,6 +20,7 @@ export { firstContactFn, handleFirstContact };
 export { followupSequenceFn, handleFollowup, resolveFollowupPlan };
 export { autoAssignLeadFn, reAssignHotLeadFn, handleAutoAssign, handleReAssignHot };
 export { respondOnMessageFn, handleRespondOnMessage };
+export { escalateOnClassifiedFn, handleEscalateOnClassified };
 
 export const functions = [
   classifyOnMessageFn,
@@ -27,4 +29,5 @@ export const functions = [
   autoAssignLeadFn,
   reAssignHotLeadFn,
   respondOnMessageFn,
+  escalateOnClassifiedFn,
 ];

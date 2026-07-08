@@ -4,7 +4,7 @@ const { sendMessageMock } = vi.hoisted(() => ({ sendMessageMock: vi.fn() }));
 
 vi.mock("@crm/db", () => ({
   prisma: {
-    whatsAppConversation: { findFirst: vi.fn() },
+    whatsAppConversation: { findFirst: vi.fn(), update: vi.fn() },
     whatsAppMessage: { findMany: vi.fn(), create: vi.fn() },
   },
 }));
@@ -38,6 +38,7 @@ import { generateReply } from "@crm/ai";
 import { isModuleEnabled } from "@crm/config";
 
 const findFirst = vi.mocked(prisma.whatsAppConversation.findFirst);
+const updateConv = vi.mocked(prisma.whatsAppConversation.update);
 const findMany = vi.mocked(prisma.whatsAppMessage.findMany);
 const createMsg = vi.mocked(prisma.whatsAppMessage.create);
 const genReply = vi.mocked(generateReply);
@@ -54,6 +55,7 @@ const mockConversation = {
   id: "conv-1",
   remotePhone: "5511999990000",
   remoteName: "Ana",
+  aiPaused: false,
   lead: { id: "lead-1", name: "Ana", phone: "+5511999990000" },
   instance: {
     instanceName: "inst-1",
@@ -71,6 +73,7 @@ beforeEach(() => {
   findFirst.mockResolvedValue(mockConversation as never);
   findMany.mockResolvedValue(history as never);
   createMsg.mockResolvedValue({} as never);
+  updateConv.mockResolvedValue({} as never);
   genReply.mockResolvedValue({
     message: "O investimento varia conforme a turma. Posso te passar as opções?",
     shouldEscalate: false,
@@ -94,6 +97,14 @@ describe("handleRespondOnMessage", () => {
     });
     expect(res).toEqual({ skipped: true, reason: "unsupported_content" });
     expect(genReply).not.toHaveBeenCalled();
+  });
+
+  it("skip quando a IA está pausada na conversa (hand-off)", async () => {
+    findFirst.mockResolvedValueOnce({ ...mockConversation, aiPaused: true } as never);
+    const res = await handleRespondOnMessage(baseEvent);
+    expect(res).toEqual({ skipped: true, reason: "ai_paused" });
+    expect(genReply).not.toHaveBeenCalled();
+    expect(sendMessageMock).not.toHaveBeenCalled();
   });
 
   it("skip quando não há conversa", async () => {
@@ -149,6 +160,13 @@ describe("handleRespondOnMessage", () => {
     expect(res).toEqual({ skipped: false, escalated: true });
     expect(sendMessageMock).not.toHaveBeenCalled();
     expect(createMsg).not.toHaveBeenCalled();
+    // Persiste a pausa da IA na conversa (hand-off)
+    expect(updateConv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "conv-1" },
+        data: expect.objectContaining({ aiPaused: true }),
+      }),
+    );
   });
 
   it("tenant isolation: findFirst usa tenantId + id da conversa", async () => {

@@ -38,12 +38,15 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
       id: true,
       remotePhone: true,
       remoteName: true,
+      aiPaused: true,
       lead: { select: { id: true, name: true, phone: true } },
       instance: { select: { instanceName: true, provider: true, phone: true, status: true } },
     },
   });
 
   if (!conversation) return { skipped: true, reason: "no_conversation" };
+  // Hand-off: IA pausada nessa conversa (humano assumiu / HOT / escalada / manual).
+  if (conversation.aiPaused) return { skipped: true, reason: "ai_paused" };
   if (conversation.instance.status !== "CONNECTED") {
     return { skipped: true, reason: "instance_not_connected" };
   }
@@ -83,8 +86,16 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
     messages: history,
   });
 
-  // Escalada: deixa a conversa pro humano (que atende via Chatwoot) — não auto-responde.
+  // Escalada: pausa a IA nessa conversa e deixa pro humano (atende via Chatwoot).
   if (reply.shouldEscalate) {
+    await prisma.whatsAppConversation.update({
+      where: { id: conversation.id },
+      data: {
+        aiPaused: true,
+        aiPausedReason: reply.escalationReason ?? "ai_escalation",
+        aiPausedAt: new Date(),
+      },
+    });
     return { skipped: false, escalated: true };
   }
 
