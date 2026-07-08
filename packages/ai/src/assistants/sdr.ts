@@ -65,6 +65,43 @@ export const followUpOutputSchema = z.object({
 
 export type FollowUpOutput = z.infer<typeof followUpOutputSchema>;
 
+// ── Reply (resposta conversacional a inbound) ─────────────────────────────────
+
+export const replyInputSchema = z.object({
+  tenantId: z.string().min(1),
+  leadId: z.string().min(1).optional(),
+  leadName: z.string().min(1).max(120),
+  channel: z.enum(["whatsapp", "instagram", "email", "sms"]),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["lead", "sdr"]),
+        content: z.string().min(1),
+        at: z.date(),
+      }),
+    )
+    .min(1),
+  productContext: z
+    .object({
+      name: z.string().min(1),
+      priceBrl: z.number().positive(),
+      highlights: z.array(z.string().min(1)).min(1).max(5),
+    })
+    .optional(),
+  tone: z.enum(["formal", "informal", "consultivo"]).default("consultivo"),
+});
+
+// z.input: `tone` (com .default) é opcional na entrada.
+export type ReplyInput = z.input<typeof replyInputSchema>;
+
+export const replyOutputSchema = z.object({
+  message: z.string().min(1).max(900),
+  shouldEscalate: z.boolean(),
+  escalationReason: z.string().max(200).nullable(),
+});
+
+export type ReplyOutput = z.infer<typeof replyOutputSchema>;
+
 // ── Internals ─────────────────────────────────────────────────────────────────
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -94,6 +131,42 @@ REGRAS:
 - Máximo 600 caracteres
 
 CAMPOS DE SAÍDA JSON: message, shouldEscalate, nextAttemptHours (null se shouldEscalate=true).`;
+
+const REPLY_SYSTEM = `Você é um SDR consultivo especializado em pós-graduações médicas,
+respondendo a um lead numa conversa em andamento (WhatsApp/canal digital).
+
+REGRAS:
+- Responda à ÚLTIMA mensagem do lead, considerando o histórico
+- Seja objetivo e consultivo; tire dúvidas e conduza para o próximo passo (qualificação/agendamento)
+- Máximo 900 caracteres; 1-2 emojis no máximo se o tom for informal/consultivo
+- NÃO invente preços, datas ou condições que não estejam no contexto fornecido
+- shouldEscalate=true quando: o lead pede explicitamente falar com humano, faz reclamação,
+  demonstra intenção clara de compra/matrícula (precisa de humano), ou pergunta algo fora do
+  escopo do SDR. Nesses casos, escreva uma mensagem curta de transição e preencha escalationReason.
+
+CAMPOS DE SAÍDA JSON: message, shouldEscalate, escalationReason (null se shouldEscalate=false).`;
+
+function buildReplyPrompt(input: ReplyInput): string {
+  const lines: string[] = [
+    `Lead: ${input.leadName}`,
+    `Canal: ${input.channel}`,
+    `Tom: ${input.tone}`,
+  ];
+
+  if (input.productContext) {
+    lines.push(
+      `Produto: ${input.productContext.name}`,
+      `Destaques: ${input.productContext.highlights.join(", ")}`,
+    );
+  }
+
+  lines.push("", "Conversa até aqui:");
+  for (const msg of input.messages) {
+    lines.push(`[${msg.role.toUpperCase()}] ${msg.content}`);
+  }
+
+  return lines.join("\n");
+}
 
 function buildFirstContactPrompt(input: FirstContactInput): string {
   const lines: string[] = [
@@ -168,6 +241,24 @@ export async function generateFollowUp(input: FollowUpInput): Promise<FollowUpOu
     schema: followUpOutputSchema,
     system: FOLLOW_UP_SYSTEM,
     prompt: buildFollowUpPrompt(input),
+  });
+
+  return object;
+}
+
+export async function generateReply(input: ReplyInput): Promise<ReplyOutput> {
+  replyInputSchema.parse(input);
+
+  const openai = createOpenAI({
+    baseURL: OPENROUTER_BASE_URL,
+    apiKey: process.env.OPENROUTER_API_KEY ?? "",
+  });
+
+  const { object } = await generateObject({
+    model: openai(MODELS.sdr),
+    schema: replyOutputSchema,
+    system: REPLY_SYSTEM,
+    prompt: buildReplyPrompt(input),
   });
 
   return object;

@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { sendWhatsAppMessageAction, markConversationReadAction } from "@/app/actions/whatsapp";
-import { Send, MessageCircle, Search, CheckCheck, Check, Clock, User } from "lucide-react";
+import {
+  sendWhatsAppMessageAction,
+  markConversationReadAction,
+  toggleConversationAiAction,
+} from "@/app/actions/whatsapp";
+import { Send, MessageCircle, Search, CheckCheck, Check, Clock, User, Bot, BotOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface Message {
@@ -21,6 +25,7 @@ export interface Conversation {
   remoteName: string | null;
   unreadCount: number;
   lastMessageAt: string | null; // ISO string from server
+  aiPaused: boolean;
   lead: { id: string; name: string } | null;
   contact: { id: string; name: string } | null;
   messages: Message[];
@@ -53,6 +58,36 @@ function StatusIcon({ status, fromMe }: { status: string; fromMe: boolean }) {
 
 function getDisplayName(conv: Conversation): string {
   return conv.lead?.name ?? conv.contact?.name ?? conv.remoteName ?? `+${conv.remotePhone}`;
+}
+
+// Toggle de hand-off: pausa/retoma a IA SDR nesta conversa.
+function AiToggle({ conversationId, paused }: { conversationId: string; paused: boolean }) {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={() =>
+        startTransition(async () => {
+          await toggleConversationAiAction(conversationId, !paused);
+          router.refresh();
+        })
+      }
+      aria-pressed={!paused}
+      title={paused ? "IA pausada — clique para reativar" : "IA ativa — clique para pausar"}
+      className={cn(
+        "flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shrink-0 transition-colors disabled:opacity-50",
+        paused
+          ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+          : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+      )}
+    >
+      {paused ? <BotOff size={13} /> : <Bot size={13} />}
+      {paused ? "IA pausada" : "IA ativa"}
+    </button>
+  );
 }
 
 export function WaInbox({ conversations, selectedId, instanceStatus }: Props) {
@@ -219,6 +254,7 @@ export function WaInbox({ conversations, selectedId, instanceStatus }: Props) {
               <p className="font-medium text-sm truncate">{getDisplayName(selected)}</p>
               <p className="text-xs text-muted-foreground">+{selected.remotePhone}</p>
             </div>
+            <AiToggle conversationId={selected.id} paused={selected.aiPaused} />
             {selected.lead && (
               <a
                 href={`/leads/${selected.lead.id}`}

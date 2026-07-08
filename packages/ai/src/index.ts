@@ -41,14 +41,19 @@ export type { ClassifierInput, Classification } from "./assistants/classifier";
 export {
   generateFirstContact,
   generateFollowUp,
+  generateReply,
   firstContactInputSchema,
   firstContactOutputSchema,
   followUpInputSchema,
   followUpOutputSchema,
+  replyInputSchema,
+  replyOutputSchema,
 } from "./assistants/sdr";
 export type {
   FirstContactInput,
   FirstContactOutput,
   FollowUpInput,
   FollowUpOutput,
+  ReplyInput,
+  ReplyOutput,
 } from "./assistants/sdr";

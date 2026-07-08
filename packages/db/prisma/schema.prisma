@@ -629,6 +629,11 @@ model WhatsAppConversation {
   contactId     String?
   unreadCount   Int       @default(0)
   lastMessageAt DateTime?
+  // Escalada / hand-off: quando true, a IA SDR não responde automaticamente
+  // (humano assumiu, lead virou HOT, IA escalou, ou pausa manual).
+  aiPaused       Boolean   @default(false)
+  aiPausedReason String?
+  aiPausedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -35,6 +35,7 @@ export default async function WhatsAppPage({ searchParams }: Props) {
       remoteName: true,
       unreadCount: true,
       lastMessageAt: true,
+      aiPaused: true,
       lead: { select: { id: true, name: true } },
       contact: { select: { id: true, name: true } },
       messages: {
@@ -77,6 +78,7 @@ export default async function WhatsAppPage({ searchParams }: Props) {
     remoteName:    c.remoteName,
     unreadCount:   c.unreadCount,
     lastMessageAt: c.lastMessageAt?.toISOString() ?? null,
+    aiPaused:      c.aiPaused,
     lead:          c.lead,
     contact:       c.contact,
     messages: (c.id === selectedId ? selectedMessages : c.messages).map((m) => ({

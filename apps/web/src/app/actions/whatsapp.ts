@@ -243,6 +243,44 @@ export async function markConversationReadAction(conversationId: string) {
   revalidatePath("/whatsapp");
 }
 
+// ─── Escalada: pausar/retomar IA numa conversa (hand-off manual) ──────────────
+
+export async function toggleConversationAiAction(
+  conversationId: string,
+  pause: boolean,
+): Promise<{ error: string } | { success: string }> {
+  const { session, error } = await requireRole(ROLES_WRITE);
+  if (error) return { error: "Acesso negado" };
+
+  const tenantId = session.user.tenantId;
+  const conv = await prisma.whatsAppConversation.findFirst({
+    where: { id: conversationId, tenantId },
+    select: { id: true },
+  });
+  if (!conv) return { error: "Conversa não encontrada" };
+
+  await prisma.whatsAppConversation.update({
+    where: { id: conversationId },
+    data: {
+      aiPaused: pause,
+      aiPausedReason: pause ? "manual" : null,
+      aiPausedAt: pause ? new Date() : null,
+      updatedAt: new Date(),
+    },
+  });
+
+  await logAudit({
+    tenantId,
+    userId: session.user.id,
+    action: pause ? "whatsapp.ai_pause" : "whatsapp.ai_resume",
+    entity: "WhatsAppConversation",
+    entityId: conversationId,
+  });
+
+  revalidatePath("/whatsapp");
+  return { success: pause ? "IA pausada nesta conversa." : "IA reativada nesta conversa." };
+}
+
 // ─── Vincular conversa a lead ─────────────────────────────────────────────────
 
 export async function linkConversationToLeadAction(
