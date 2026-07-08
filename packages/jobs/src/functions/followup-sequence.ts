@@ -1,8 +1,8 @@
 import { prisma } from "@crm/db";
 import { generateFollowUp } from "@crm/ai";
-import { createEvolutionAdapter } from "@crm/whatsapp";
 import { resolveModule, isModuleEnabled } from "@crm/config";
 import { inngest } from "../client";
+import { resolveWhatsappAdapter } from "../whatsapp-adapter";
 import type { EventData } from "../events";
 
 // Módulo do follow-up no registro de config. A cadência (dias) e o toggle
@@ -51,7 +51,7 @@ export async function handleFollowup(
       instanceId: true,
       remotePhone: true,
       lead: { select: { id: true, name: true, phone: true } },
-      instance: { select: { instanceName: true, phone: true, status: true } },
+      instance: { select: { instanceName: true, provider: true, phone: true, status: true } },
     },
   });
 
@@ -96,13 +96,8 @@ export async function handleFollowup(
     daysSinceLastReply,
   });
 
-  // Send via Evolution adapter
-  const adapter = createEvolutionAdapter({
-    baseUrl: process.env.EVOLUTION_API_URL ?? "",
-    apiKey: process.env.EVOLUTION_WEBHOOK_SECRET ?? "",
-    instanceName: conversation.instance.instanceName,
-    instancePhone: conversation.instance.phone ?? "+5500000000000",
-  });
+  // Envio pelo adapter do provider real da instância (Evolution/Z-API/...)
+  const adapter = resolveWhatsappAdapter(conversation.instance);
 
   await adapter.sendMessage({
     tenantId,

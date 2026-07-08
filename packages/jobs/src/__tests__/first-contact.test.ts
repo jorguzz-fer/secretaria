@@ -20,6 +20,12 @@ vi.mock("@crm/whatsapp", () => ({
     verifyWebhookSignature: vi.fn(),
     parseInbound: vi.fn(),
   })),
+  createZapiAdapter: vi.fn(() => ({
+    provider: "zapi",
+    sendMessage: vi.fn().mockResolvedValue({ providerMessageId: "zwamid-test", status: "sent" }),
+    verifyWebhookSignature: vi.fn(),
+    parseInbound: vi.fn(),
+  })),
 }));
 
 vi.mock("../client", () => ({
@@ -52,6 +58,7 @@ const mockLead = {
 const mockInstance = {
   id: "inst-1",
   instanceName: "inst-tenant-1",
+  provider: "EVOLUTION",
   phone: "+5511000000001",
   status: "CONNECTED",
   tenantId: "tenant-1",

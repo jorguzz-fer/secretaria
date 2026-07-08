@@ -1,7 +1,7 @@
 import { prisma } from "@crm/db";
 import { generateFirstContact } from "@crm/ai";
-import { createEvolutionAdapter } from "@crm/whatsapp";
 import { inngest } from "../client";
+import { resolveWhatsappAdapter } from "../whatsapp-adapter";
 import type { EventData } from "../events";
 
 const DEFAULT_PRODUCT = {
@@ -45,7 +45,7 @@ export async function handleFirstContact(
   // Load WhatsApp instance for tenant
   const instance = await prisma.whatsAppInstance.findUnique({
     where: { tenantId },
-    select: { id: true, instanceName: true, phone: true, status: true },
+    select: { id: true, instanceName: true, provider: true, phone: true, status: true },
   });
 
   if (!instance) return { skipped: true, reason: "no_wa_instance" };
@@ -67,13 +67,8 @@ export async function handleFirstContact(
     tone: "consultivo",
   });
 
-  // Send via Evolution adapter
-  const adapter = createEvolutionAdapter({
-    baseUrl: process.env.EVOLUTION_API_URL ?? "",
-    apiKey: process.env.EVOLUTION_WEBHOOK_SECRET ?? "",
-    instanceName: instance.instanceName,
-    instancePhone: instance.phone ?? "+5500000000000",
-  });
+  // Envio pelo adapter do provider real da instância (Evolution/Z-API/...)
+  const adapter = resolveWhatsappAdapter(instance);
 
   await adapter.sendMessage({
     tenantId,

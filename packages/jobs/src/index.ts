@@ -10,6 +10,9 @@ import { autoAssignLeadFn, reAssignHotLeadFn, handleAutoAssign, handleReAssignHo
 export { inngest } from "./client";
 export * from "./events";
 
+export { resolveWhatsappAdapter } from "./whatsapp-adapter";
+export type { InstanceForAdapter } from "./whatsapp-adapter";
+
 export { classifyOnMessageFn, handleClassifyOnMessage };
 export { firstContactFn, handleFirstContact };
 export { followupSequenceFn, handleFollowup, resolveFollowupPlan };
