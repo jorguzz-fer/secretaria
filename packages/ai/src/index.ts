@@ -57,3 +57,10 @@ export type {
   ReplyInput,
   ReplyOutput,
 } from "./assistants/sdr";
+
+export {
+  interpretScheduling,
+  schedulingIntentSchema,
+  schedulingInterpretInputSchema,
+} from "./assistants/scheduling";
+export type { SchedulingIntent, SchedulingInterpretInput } from "./assistants/scheduling";
