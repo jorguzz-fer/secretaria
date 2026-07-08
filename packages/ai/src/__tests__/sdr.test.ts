@@ -4,9 +4,54 @@ import {
   firstContactOutputSchema,
   followUpInputSchema,
   followUpOutputSchema,
+  replyInputSchema,
+  replyOutputSchema,
   generateFirstContact,
   generateFollowUp,
 } from "../assistants/sdr";
+
+describe("replyInputSchema", () => {
+  const base = {
+    tenantId: "t1",
+    leadName: "João",
+    channel: "whatsapp" as const,
+    messages: [{ role: "lead" as const, content: "Qual o valor?", at: new Date() }],
+  };
+
+  it("aceita payload mínimo (leadId opcional, tone default)", () => {
+    const r = replyInputSchema.safeParse(base);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.tone).toBe("consultivo");
+  });
+
+  it("exige ao menos uma mensagem", () => {
+    expect(replyInputSchema.safeParse({ ...base, messages: [] }).success).toBe(false);
+  });
+
+  it("rejeita canal desconhecido", () => {
+    expect(replyInputSchema.safeParse({ ...base, channel: "telegram" }).success).toBe(false);
+  });
+});
+
+describe("replyOutputSchema", () => {
+  it("aceita saída válida com escalationReason null", () => {
+    const r = replyOutputSchema.safeParse({
+      message: "Oi! O investimento varia conforme a turma...",
+      shouldEscalate: false,
+      escalationReason: null,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita mensagem acima de 900 chars", () => {
+    const r = replyOutputSchema.safeParse({
+      message: "x".repeat(901),
+      shouldEscalate: false,
+      escalationReason: null,
+    });
+    expect(r.success).toBe(false);
+  });
+});
 
 describe("firstContactInputSchema", () => {
   it("aceita payload mínimo válido", () => {
