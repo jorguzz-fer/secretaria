@@ -6,13 +6,15 @@ export const PUBLIC_PATHS = [
   "/signup",
   "/api/auth",
   "/api/health",
-  // ⚠️ /api/cron e /api/webhooks são públicos para o middleware (sem sessão JWT),
-  // mas implementam sua PRÓPRIA autenticação em cada route handler:
+  // ⚠️ /api/cron, /api/webhooks e /api/inngest são públicos para o middleware
+  // (sem sessão JWT), mas implementam sua PRÓPRIA autenticação em cada handler:
   //   - /api/cron/*     → valida header x-cron-secret === process.env.CRON_SECRET
   //   - /api/webhooks/* → valida origem/token do provider (Evolution API, etc.)
+  //   - /api/inngest    → SDK valida X-Inngest-Signature com INNGEST_SIGNING_KEY
   // NUNCA remova esses paths daqui sem garantir que o handler valida o secret.
   "/api/cron",
   "/api/webhooks",
+  "/api/inngest",
   "/privacidade",
   "/termos",
   "/forgot-password",
