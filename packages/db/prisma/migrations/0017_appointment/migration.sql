@@ -1,11 +1,11 @@
 -- Migration 0017: Appointment — agendamentos (Agenda; interno + espelho Google)
 -- Non-breaking: novo enum + tabela
+--
+-- Nota: enum criado com CREATE TYPE simples (sem bloco DO/$$). O runner de
+-- produção (apps/web/migrate.js) divide o SQL por ';' e NÃO suporta blocos
+-- $$...$$ — a idempotência do enum vem do catch de "already exists" do runner.
 
-DO $$ BEGIN
-  CREATE TYPE "AppointmentStatus" AS ENUM ('PROPOSED', 'CONFIRMED', 'CANCELLED', 'COMPLETED');
-EXCEPTION
-  WHEN duplicate_object THEN null;
-END $$;
+CREATE TYPE "AppointmentStatus" AS ENUM ('PROPOSED', 'CONFIRMED', 'CANCELLED', 'COMPLETED');
 
 CREATE TABLE IF NOT EXISTS "Appointment" (
   "id"             TEXT              NOT NULL,
