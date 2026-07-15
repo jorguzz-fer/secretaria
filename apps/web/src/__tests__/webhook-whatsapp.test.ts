@@ -138,6 +138,40 @@ describe("POST /api/webhooks/whatsapp — z-api ReceivedCallback", () => {
     );
   });
 
+  it("self-heal de conversa órfã: existente sem leadId cria lead e vincula", async () => {
+    conv.findUnique.mockResolvedValueOnce({
+      id: "conv-existente",
+      leadId: null,
+      contactId: null,
+      remoteName: "Ana",
+      unreadCount: 2,
+    } as never);
+    await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
+    expect(lead.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ source: "WHATSAPP" }) }),
+    );
+    expect(conv.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "conv-existente" },
+        data: expect.objectContaining({ leadId: "lead-new" }),
+      }),
+    );
+    expect(conv.create).not.toHaveBeenCalled();
+  });
+
+  it("conversa existente que JÁ tem lead: não cria nem revincula", async () => {
+    conv.findUnique.mockResolvedValueOnce({
+      id: "conv-existente",
+      leadId: "lead-antigo",
+      contactId: null,
+      remoteName: "Ana",
+      unreadCount: 2,
+    } as never);
+    await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
+    expect(lead.create).not.toHaveBeenCalled();
+    expect(lead.findFirst).not.toHaveBeenCalled();
+  });
+
   it("dispara evento message/received para a IA", async () => {
     await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
     expect(inngestSendMock).toHaveBeenCalledWith(
