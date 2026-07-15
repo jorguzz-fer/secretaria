@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
   const instance = await prisma.whatsAppInstance.findUnique({
     where: { instanceName: detected.instanceKey },
-    select: { id: true, tenantId: true, phone: true },
+    select: { id: true, tenantId: true, phone: true, status: true },
   });
   if (!instance) return NextResponse.json({ ok: true });
 
@@ -96,6 +96,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // Self-heal: se chegou mensagem, a instância ESTÁ conectada. O Z-API só manda
+  // ConnectedCallback em eventos de conexão (fácil de perder), então o status no
+  // banco pode ficar preso em DISCONNECTED e bloquear a resposta da IA. Corrige
+  // de forma idempotente ao receber qualquer mensagem.
+  if (result.messages.length > 0 && instance.status !== "CONNECTED") {
+    await prisma.whatsAppInstance.update({
+      where: { id: instance.id },
+      data: { status: "CONNECTED", updatedAt: new Date() },
+    });
+  }
+
   for (const msg of result.messages) {
     const phone = msg.from.phoneE164.replace("+", "");
     const normalizedPhone = phone.slice(-8);
@@ -133,7 +144,23 @@ export async function POST(req: Request) {
         }),
       ]);
 
-      convLeadId = lead?.id ?? null;
+      // Número novo (sem lead nem contato): cria o Lead para ele entrar no CRM.
+      // Sem isso, um inbound de desconhecido criava conversa órfã (leadId=null) e
+      // não aparecia no funil. Vinculado a contato existente, não duplica lead.
+      if (!lead && !contact) {
+        const created = await prisma.lead.create({
+          data: {
+            tenantId: instance.tenantId,
+            name: msg.from.name?.trim() || msg.from.phoneE164,
+            phone: msg.from.phoneE164,
+            source: "WHATSAPP",
+          },
+          select: { id: true },
+        });
+        convLeadId = created.id;
+      } else {
+        convLeadId = lead?.id ?? null;
+      }
       const conv = await prisma.whatsAppConversation.create({
         data: {
           tenantId: instance.tenantId,
