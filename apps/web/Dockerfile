@@ -10,6 +10,7 @@ RUN npm install -g pnpm@10
 # Copia manifests de todos os workspaces para layer caching
 COPY package.json pnpm-workspace.yaml .npmrc ./
 COPY apps/web/package.json ./apps/web/
+COPY packages/config/package.json ./packages/config/
 COPY packages/db/package.json ./packages/db/
 COPY packages/validators/package.json ./packages/validators/
 COPY packages/ai/package.json ./packages/ai/
@@ -23,6 +24,7 @@ RUN pnpm install --no-frozen-lockfile
 # Copia source dos packages workspace DEPOIS do install
 # Docker dereferenceia symlinks pnpm durante COPY --from, então o source
 # precisa estar presente na stage deps para node_modules/@crm/* ter src/
+COPY packages/config/src ./packages/config/src
 COPY packages/db/src ./packages/db/src
 COPY packages/validators/src ./packages/validators/src
 COPY packages/ai/src ./packages/ai/src
@@ -49,9 +51,10 @@ COPY . .
 # Docker preserva symlinks do COPY --from mas o target precisa existir;
 # ln -sf garante resolução correta independente do comportamento do runtime pnpm
 RUN mkdir -p node_modules/@crm && \
-    rm -rf node_modules/@crm/db node_modules/@crm/validators node_modules/@crm/ai \
+    rm -rf node_modules/@crm/config node_modules/@crm/db node_modules/@crm/validators node_modules/@crm/ai \
            node_modules/@crm/ui node_modules/@crm/jobs node_modules/@crm/tracking \
            node_modules/@crm/whatsapp && \
+    ln -sf /app/packages/config     node_modules/@crm/config && \
     ln -sf /app/packages/db         node_modules/@crm/db && \
     ln -sf /app/packages/validators node_modules/@crm/validators && \
     ln -sf /app/packages/ai         node_modules/@crm/ai && \
