@@ -78,6 +78,18 @@ const MIGRATIONS = [
     name: "0014_membership_capacity",
     check: `SELECT COUNT(*)::int AS cnt FROM information_schema.columns WHERE table_schema='public' AND table_name='Membership' AND column_name='acceptingLeads'`,
   },
+  {
+    name: "0015_tenant_module",
+    check: `SELECT COUNT(*)::int AS cnt FROM information_schema.tables WHERE table_schema='public' AND table_name='TenantModule'`,
+  },
+  {
+    name: "0016_conversation_ai_pause",
+    check: `SELECT COUNT(*)::int AS cnt FROM information_schema.columns WHERE table_schema='public' AND table_name='WhatsAppConversation' AND column_name='aiPaused'`,
+  },
+  {
+    name: "0017_appointment",
+    check: `SELECT COUNT(*)::int AS cnt FROM information_schema.tables WHERE table_schema='public' AND table_name='Appointment'`,
+  },
 ];
 
 /**
