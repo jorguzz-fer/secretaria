@@ -18,6 +18,44 @@ import { mirrorInboundToChatwoot } from "@/lib/chatwoot";
  * @crm/whatsapp. Esta rota cuida de: lookup tenant → dedup DB → persistência
  * → evento Inngest → espelho no Chatwoot (opção "a": app recebe, Chatwoot é cópia).
  */
+/**
+ * Resolve o lead de um inbound pelo telefone: reusa lead existente; se não há
+ * lead mas há contato, mantém sem lead (contato != lead por design); se não há
+ * nenhum, cria um Lead (source WHATSAPP) para o contato entrar no CRM.
+ * Nome do lead = pushName do WhatsApp, ou o próprio telefone como fallback.
+ */
+async function resolveInboundLead(
+  tenantId: string,
+  normalizedPhone: string,
+  phoneE164: string,
+  name: string | null,
+): Promise<{ leadId: string | null; contactId: string | null }> {
+  const [lead, contact] = await Promise.all([
+    prisma.lead.findFirst({
+      where: { tenantId, phone: { contains: normalizedPhone } },
+      select: { id: true },
+    }),
+    prisma.contact.findFirst({
+      where: { tenantId, phone: { contains: normalizedPhone } },
+      select: { id: true },
+    }),
+  ]);
+
+  if (lead) return { leadId: lead.id, contactId: contact?.id ?? null };
+  if (contact) return { leadId: null, contactId: contact.id };
+
+  const created = await prisma.lead.create({
+    data: {
+      tenantId,
+      name: name?.trim() || phoneE164,
+      phone: phoneE164,
+      source: "WHATSAPP",
+    },
+    select: { id: true },
+  });
+  return { leadId: created.id, contactId: null };
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const headers = Object.fromEntries(req.headers.entries());
@@ -123,44 +161,45 @@ export async function POST(req: Request) {
     if (existingConv) {
       convId = existingConv.id;
       convLeadId = existingConv.leadId;
+
+      // Self-heal: conversa órfã (criada antes do lead existir, ou por um lookup
+      // que não achou o lead na época) — vincula/cria o lead agora para entrar
+      // no CRM. Sem isso, uma conversa criada uma vez sem lead ficaria órfã pra
+      // sempre, mesmo com novas mensagens.
+      let updatedContactId: string | undefined;
+      if (!convLeadId) {
+        const resolved = await resolveInboundLead(
+          instance.tenantId,
+          normalizedPhone,
+          msg.from.phoneE164,
+          msg.from.name ?? null,
+        );
+        convLeadId = resolved.leadId;
+        if (!existingConv.contactId && resolved.contactId) {
+          updatedContactId = resolved.contactId;
+        }
+      }
+
       await prisma.whatsAppConversation.update({
         where: { id: convId },
         data: {
           remoteName: msg.from.name ?? existingConv.remoteName,
+          // Só grava quando resolvemos um lead/contato — undefined = não altera.
+          leadId: convLeadId ?? undefined,
+          contactId: updatedContactId,
           lastMessageAt: msg.receivedAt,
           unreadCount: existingConv.unreadCount + 1,
           updatedAt: new Date(),
         },
       });
     } else {
-      const [lead, contact] = await Promise.all([
-        prisma.lead.findFirst({
-          where: { tenantId: instance.tenantId, phone: { contains: normalizedPhone } },
-          select: { id: true },
-        }),
-        prisma.contact.findFirst({
-          where: { tenantId: instance.tenantId, phone: { contains: normalizedPhone } },
-          select: { id: true },
-        }),
-      ]);
-
-      // Número novo (sem lead nem contato): cria o Lead para ele entrar no CRM.
-      // Sem isso, um inbound de desconhecido criava conversa órfã (leadId=null) e
-      // não aparecia no funil. Vinculado a contato existente, não duplica lead.
-      if (!lead && !contact) {
-        const created = await prisma.lead.create({
-          data: {
-            tenantId: instance.tenantId,
-            name: msg.from.name?.trim() || msg.from.phoneE164,
-            phone: msg.from.phoneE164,
-            source: "WHATSAPP",
-          },
-          select: { id: true },
-        });
-        convLeadId = created.id;
-      } else {
-        convLeadId = lead?.id ?? null;
-      }
+      const resolved = await resolveInboundLead(
+        instance.tenantId,
+        normalizedPhone,
+        msg.from.phoneE164,
+        msg.from.name ?? null,
+      );
+      convLeadId = resolved.leadId;
       const conv = await prisma.whatsAppConversation.create({
         data: {
           tenantId: instance.tenantId,
@@ -169,7 +208,7 @@ export async function POST(req: Request) {
           remotePhone: phone,
           remoteName: msg.from.name ?? null,
           leadId: convLeadId,
-          contactId: contact?.id ?? null,
+          contactId: resolved.contactId,
           unreadCount: 1,
           lastMessageAt: msg.receivedAt,
         },
