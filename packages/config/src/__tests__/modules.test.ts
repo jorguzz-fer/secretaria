@@ -5,6 +5,7 @@ import {
   isModuleKey,
   defaultConfig,
 } from "../modules";
+import { SecretariaConfigSchema } from "../schemas";
 
 describe("MODULES registry", () => {
   it("contém os 7 módulos da plataforma", () => {
@@ -86,5 +87,42 @@ describe("FollowupConfigSchema", () => {
 
   it("rejeita campos desconhecidos (strict)", () => {
     expect(() => schema.parse({ sequenceDays: [1], foo: "bar" })).toThrow();
+  });
+});
+
+describe("SecretariaConfigSchema (persona SDR)", () => {
+  it("config vazia resolve para defaults válidos", () => {
+    const c = SecretariaConfigSchema.parse({});
+    expect(c.agentName).toBe("Assistente");
+    expect(c.tone).toBe("consultivo");
+    expect(c.canQuotePrice).toBe(false);
+    expect(c.businessName).toBe("");
+    expect(c.role.length).toBeGreaterThan(0);
+  });
+
+  it("aceita override completo da persona", () => {
+    const c = SecretariaConfigSchema.parse({
+      agentName: "Bia",
+      businessName: "Faculdade Medicine",
+      role: "consultora de pós",
+      tone: "informal",
+      productInfo: "Cardiologia 12x R$ 890",
+      goal: "agendar call",
+      instructions: "sem desconto",
+      canQuotePrice: true,
+    });
+    expect(c.agentName).toBe("Bia");
+    expect(c.canQuotePrice).toBe(true);
+    expect(c.tone).toBe("informal");
+  });
+
+  it("rejeita tom inválido e campos desconhecidos (strict)", () => {
+    expect(() => SecretariaConfigSchema.parse({ tone: "seco" })).toThrow();
+    expect(() => SecretariaConfigSchema.parse({ foo: "bar" })).toThrow();
+  });
+
+  it("limita tamanho de productInfo/instructions", () => {
+    expect(() => SecretariaConfigSchema.parse({ productInfo: "x".repeat(2001) })).toThrow();
+    expect(() => SecretariaConfigSchema.parse({ instructions: "x".repeat(2001) })).toThrow();
   });
 });

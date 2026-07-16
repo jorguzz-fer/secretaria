@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma, Prisma } from "@crm/db";
 import { requireRole, ROLES_ADMIN } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
-import { MODULES, isModuleKey, FollowupConfigSchema } from "@crm/config";
+import { MODULES, isModuleKey, FollowupConfigSchema, SecretariaConfigSchema } from "@crm/config";
 import { z } from "zod";
 
 export type ActionState = { error: string } | { success: string } | null;
@@ -105,4 +105,54 @@ export async function updateFollowupConfigAction(
 
   revalidatePath("/configuracoes/modulos");
   return { success: "Cadência de follow-up salva." };
+}
+
+/**
+ * Atualiza a config do módulo secretária (persona do SDR): nome, negócio,
+ * função, tom, produto/preços, objetivo e instruções. Alimenta o system prompt
+ * do `generateReply` por tenant.
+ */
+export async function updateSecretariaConfigAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { session, error } = await requireRole(ROLES_ADMIN);
+  if (error) return { error: "Apenas administradores podem editar configurações" };
+
+  const parsed = SecretariaConfigSchema.safeParse({
+    agentName: String(formData.get("agentName") ?? "").trim(),
+    businessName: String(formData.get("businessName") ?? "").trim(),
+    role: String(formData.get("role") ?? "").trim(),
+    tone: String(formData.get("tone") ?? "consultivo"),
+    productInfo: String(formData.get("productInfo") ?? "").trim(),
+    goal: String(formData.get("goal") ?? "").trim(),
+    instructions: String(formData.get("instructions") ?? "").trim(),
+    canQuotePrice: formData.get("canQuotePrice") === "on",
+  });
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const tenantId = session!.user.tenantId;
+
+  await prisma.tenantModule.upsert({
+    where: { tenantId_moduleKey: { tenantId, moduleKey: "secretaria" } },
+    create: {
+      tenantId,
+      moduleKey: "secretaria",
+      enabled: MODULES.secretaria.defaultEnabled,
+      settings: parsed.data as Prisma.InputJsonValue,
+    },
+    update: { settings: parsed.data as Prisma.InputJsonValue },
+  });
+
+  await logAudit({
+    tenantId,
+    userId: session!.user.id,
+    action: "module.config_update",
+    entity: "TenantModule",
+    entityId: "secretaria",
+    meta: { moduleKey: "secretaria", canQuotePrice: parsed.data.canQuotePrice },
+  });
+
+  revalidatePath("/configuracoes/modulos");
+  return { success: "Config da secretária (SDR) salva." };
 }

@@ -48,6 +48,7 @@ export {
   followUpOutputSchema,
   replyInputSchema,
   replyOutputSchema,
+  sdrPersonaSchema,
 } from "./assistants/sdr";
 export type {
   FirstContactInput,
@@ -56,6 +57,7 @@ export type {
   FollowUpOutput,
   ReplyInput,
   ReplyOutput,
+  SdrPersona,
 } from "./assistants/sdr";
 
 export {

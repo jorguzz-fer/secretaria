@@ -11,7 +11,7 @@ vi.mock("@crm/db", () => ({
 
 vi.mock("@crm/ai", () => ({ generateReply: vi.fn() }));
 
-vi.mock("@crm/config", () => ({ isModuleEnabled: vi.fn() }));
+vi.mock("@crm/config", () => ({ isModuleEnabled: vi.fn(), getTenantConfig: vi.fn() }));
 
 vi.mock("../functions/schedule", () => ({ tryScheduling: vi.fn() }));
 
@@ -37,10 +37,11 @@ vi.mock("../client", () => ({
 import { handleRespondOnMessage } from "../functions/respond-on-message";
 import { prisma } from "@crm/db";
 import { generateReply } from "@crm/ai";
-import { isModuleEnabled } from "@crm/config";
+import { isModuleEnabled, getTenantConfig } from "@crm/config";
 import { tryScheduling } from "../functions/schedule";
 
 const sched = vi.mocked(tryScheduling);
+const tenantConfig = vi.mocked(getTenantConfig);
 const findFirst = vi.mocked(prisma.whatsAppConversation.findFirst);
 const updateConv = vi.mocked(prisma.whatsAppConversation.update);
 const findMany = vi.mocked(prisma.whatsAppMessage.findMany);
@@ -74,6 +75,17 @@ const history = [{ fromMe: false, body: "Qual o valor?", timestamp: new Date() }
 beforeEach(() => {
   vi.clearAllMocks();
   modEnabled.mockResolvedValue(true);
+  tenantConfig.mockResolvedValue({
+    agentName: "Assistente",
+    businessName: "",
+    role: "um SDR consultivo",
+    tone: "consultivo",
+    productInfo: "",
+    goal: "qualificar",
+    instructions: "",
+    canQuotePrice: false,
+    maxTurns: 12,
+  } as never);
   sched.mockResolvedValue({ handled: false } as never);
   findFirst.mockResolvedValue(mockConversation as never);
   findMany.mockResolvedValue(history as never);

@@ -1,6 +1,6 @@
 import { prisma } from "@crm/db";
 import { generateReply } from "@crm/ai";
-import { isModuleEnabled } from "@crm/config";
+import { isModuleEnabled, getTenantConfig } from "@crm/config";
 import { inngest } from "../client";
 import { resolveWhatsappAdapter } from "../whatsapp-adapter";
 import { tryScheduling } from "./schedule";
@@ -120,12 +120,26 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
     }
   }
 
+  // Persona por tenant (config `secretaria`): quem a IA é, produto, preços,
+  // instruções. O generateReply monta o system prompt a partir disso.
+  const sdrConfig = await getTenantConfig(tenantId, SDR_MODULE);
+
   const reply = await generateReply({
     tenantId,
     leadId: conversation.lead?.id,
     leadName,
     channel: "whatsapp",
     messages: history,
+    persona: {
+      agentName: sdrConfig.agentName,
+      businessName: sdrConfig.businessName,
+      role: sdrConfig.role,
+      tone: sdrConfig.tone,
+      productInfo: sdrConfig.productInfo,
+      goal: sdrConfig.goal,
+      instructions: sdrConfig.instructions,
+      canQuotePrice: sdrConfig.canQuotePrice,
+    },
   });
 
   // Escalada: pausa a IA nessa conversa e deixa pro humano (atende via Chatwoot).
