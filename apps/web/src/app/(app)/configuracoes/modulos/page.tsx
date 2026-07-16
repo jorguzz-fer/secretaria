@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { MODULE_KEYS, MODULES, FollowupConfigSchema } from "@crm/config";
+import { MODULE_KEYS, MODULES, FollowupConfigSchema, SecretariaConfigSchema } from "@crm/config";
 import { ModulesList } from "./ModulesList";
 import { FollowupConfigForm } from "./FollowupConfigForm";
+import { SecretariaConfigForm } from "./SecretariaConfigForm";
 import { ToggleLeft } from "lucide-react";
 
 export const metadata: Metadata = { title: "Módulos" };
@@ -34,6 +35,10 @@ export default async function ModulesSettingsPage() {
   const followup = FollowupConfigSchema.parse(byKey.get("recuperacao")?.settings ?? {});
   const recuperacaoEnabled = byKey.get("recuperacao")?.enabled ?? MODULES.recuperacao.defaultEnabled;
 
+  // Config atual da secretária/SDR (persona).
+  const secretaria = SecretariaConfigSchema.parse(byKey.get("secretaria")?.settings ?? {});
+  const secretariaEnabled = byKey.get("secretaria")?.enabled ?? MODULES.secretaria.defaultEnabled;
+
   return (
     <div className="max-w-2xl space-y-8">
       <div>
@@ -52,6 +57,34 @@ export default async function ModulesSettingsPage() {
       ) : (
         <>
           <ModulesList modules={modules} />
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-base font-semibold border-b border-border pb-2">
+                Secretária (SDR) — persona e produto
+              </h2>
+              <p className="text-xs text-muted-foreground mt-2">
+                Define quem a IA é, o tom, o produto/preços que ela pode citar e instruções
+                específicas deste cliente. Alimenta a resposta automática no WhatsApp.
+              </p>
+            </div>
+            {secretariaEnabled ? (
+              <SecretariaConfigForm
+                agentName={secretaria.agentName}
+                businessName={secretaria.businessName}
+                role={secretaria.role}
+                tone={secretaria.tone}
+                productInfo={secretaria.productInfo}
+                goal={secretaria.goal}
+                instructions={secretaria.instructions}
+                canQuotePrice={secretaria.canQuotePrice}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Ative o módulo <strong>Secretária (SDR)</strong> acima para configurar a persona.
+              </p>
+            )}
+          </section>
 
           <section className="space-y-4">
             <div>

@@ -67,6 +67,23 @@ export type FollowUpOutput = z.infer<typeof followUpOutputSchema>;
 
 // ── Reply (resposta conversacional a inbound) ─────────────────────────────────
 
+/**
+ * Persona do SDR por tenant — vem da config `secretaria` (@crm/config). Quando
+ * presente, o system prompt é montado a partir dela; ausente, cai no texto
+ * estático `REPLY_SYSTEM` (retrocompatível).
+ */
+export const sdrPersonaSchema = z.object({
+  agentName: z.string().min(1).max(60),
+  businessName: z.string().max(80).optional(),
+  role: z.string().min(1).max(200),
+  tone: z.enum(["formal", "informal", "consultivo"]),
+  productInfo: z.string().max(2000).optional(),
+  goal: z.string().max(300).optional(),
+  instructions: z.string().max(2000).optional(),
+  canQuotePrice: z.boolean(),
+});
+export type SdrPersona = z.infer<typeof sdrPersonaSchema>;
+
 export const replyInputSchema = z.object({
   tenantId: z.string().min(1),
   leadId: z.string().min(1).optional(),
@@ -88,6 +105,7 @@ export const replyInputSchema = z.object({
       highlights: z.array(z.string().min(1)).min(1).max(5),
     })
     .optional(),
+  persona: sdrPersonaSchema.optional(),
   tone: z.enum(["formal", "informal", "consultivo"]).default("consultivo"),
 });
 
@@ -145,6 +163,53 @@ REGRAS:
   escopo do SDR. Nesses casos, escreva uma mensagem curta de transição e preencha escalationReason.
 
 CAMPOS DE SAÍDA JSON: message, shouldEscalate, escalationReason (null se shouldEscalate=false).`;
+
+/**
+ * Monta o system prompt de resposta a partir da persona do tenant. Sem persona,
+ * retorna o `REPLY_SYSTEM` estático (retrocompatível com chamadas antigas/tests).
+ */
+export function buildReplySystem(persona?: SdrPersona): string {
+  if (!persona) return REPLY_SYSTEM;
+
+  const who =
+    `Você é ${persona.agentName}, ${persona.role}` +
+    (persona.businessName ? ` da ${persona.businessName}` : "") +
+    ".";
+
+  const priceRule = persona.canQuotePrice
+    ? "- Você PODE informar preços e condições que constem no CONTEXTO abaixo (nunca invente valores)."
+    : "- NÃO informe preços; se perguntarem valor, ofereça agendar uma conversa ou passar para um consultor.";
+
+  const goal = persona.goal?.trim() || "qualificar o lead e conduzir para o próximo passo";
+
+  const lines: string[] = [
+    who,
+    "Está respondendo a um lead numa conversa em andamento (WhatsApp/canal digital).",
+    "",
+    "REGRAS:",
+    "- Responda à ÚLTIMA mensagem do lead, considerando o histórico",
+    `- Seja objetivo e ${persona.tone}; conduza para o próximo passo: ${goal}`,
+    "- Máximo 900 caracteres; 1-2 emojis no máximo se o tom for informal/consultivo",
+    priceRule,
+    "- NÃO invente preços, datas ou condições que não estejam no contexto fornecido",
+    "- shouldEscalate=true quando: o lead pede explicitamente falar com humano, faz reclamação,",
+    "  demonstra intenção clara de compra/matrícula (precisa de humano), ou pergunta algo fora do",
+    "  escopo do SDR. Nesses casos, escreva uma mensagem curta de transição e preencha escalationReason.",
+  ];
+
+  if (persona.productInfo?.trim()) {
+    lines.push("", "CONTEXTO DO PRODUTO/SERVIÇO (só fale o que estiver aqui):", persona.productInfo.trim());
+  }
+  if (persona.instructions?.trim()) {
+    lines.push("", "INSTRUÇÕES ADICIONAIS:", persona.instructions.trim());
+  }
+
+  lines.push(
+    "",
+    "CAMPOS DE SAÍDA JSON: message, shouldEscalate, escalationReason (null se shouldEscalate=false).",
+  );
+  return lines.join("\n");
+}
 
 function buildReplyPrompt(input: ReplyInput): string {
   const lines: string[] = [
@@ -257,7 +322,7 @@ export async function generateReply(input: ReplyInput): Promise<ReplyOutput> {
   const { object } = await generateObject({
     model: openai(MODELS.sdr),
     schema: replyOutputSchema,
-    system: REPLY_SYSTEM,
+    system: buildReplySystem(input.persona),
     prompt: buildReplyPrompt(input),
   });
 

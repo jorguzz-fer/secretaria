@@ -8,6 +8,8 @@ import {
   replyOutputSchema,
   generateFirstContact,
   generateFollowUp,
+  buildReplySystem,
+  type SdrPersona,
 } from "../assistants/sdr";
 
 describe("replyInputSchema", () => {
@@ -50,6 +52,51 @@ describe("replyOutputSchema", () => {
       escalationReason: null,
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("buildReplySystem (persona por tenant)", () => {
+  const persona: SdrPersona = {
+    agentName: "Bia",
+    businessName: "Faculdade Medicine",
+    role: "uma consultora de pós-graduações",
+    tone: "informal",
+    productInfo: "Especialização em Cardiologia — 12x R$ 890.",
+    goal: "agendar uma call",
+    instructions: "Nunca prometa desconto.",
+    canQuotePrice: true,
+  };
+
+  it("sem persona retorna o prompt estático padrão", () => {
+    const s = buildReplySystem();
+    expect(s).toContain("SDR consultivo especializado em pós-graduações médicas");
+  });
+
+  it("com persona injeta nome, negócio, função e tom", () => {
+    const s = buildReplySystem(persona);
+    expect(s).toContain("Você é Bia, uma consultora de pós-graduações da Faculdade Medicine.");
+    expect(s).toContain("objetivo e informal");
+    expect(s).toContain("agendar uma call");
+  });
+
+  it("canQuotePrice=true libera falar preço e injeta o contexto do produto", () => {
+    const s = buildReplySystem(persona);
+    expect(s).toContain("Você PODE informar preços");
+    expect(s).toContain("Especialização em Cardiologia — 12x R$ 890.");
+    expect(s).toContain("Nunca prometa desconto.");
+  });
+
+  it("canQuotePrice=false proíbe citar preço", () => {
+    const s = buildReplySystem({ ...persona, canQuotePrice: false });
+    expect(s).toContain("NÃO informe preços");
+    expect(s).not.toContain("Você PODE informar preços");
+  });
+
+  it("campos vazios (businessName/productInfo) não vazam para o prompt", () => {
+    const s = buildReplySystem({ ...persona, businessName: "", productInfo: "", instructions: "" });
+    expect(s).toContain("Você é Bia, uma consultora de pós-graduações.");
+    expect(s).not.toContain("CONTEXTO DO PRODUTO");
+    expect(s).not.toContain("INSTRUÇÕES ADICIONAIS");
   });
 });
 

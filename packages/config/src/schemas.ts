@@ -39,7 +39,28 @@ export type FollowupConfig = z.infer<typeof FollowupConfigSchema>;
 
 export const SecretariaConfigSchema = z
   .object({
+    // Nome que a IA usa ao se apresentar.
     agentName: z.string().min(1).max(60).default("Assistente"),
+    // Nome do negócio/cliente (ex.: "Faculdade Medicine"). Vazio = não menciona.
+    businessName: z.string().max(80).default(""),
+    // Persona/função da IA — o que ela é. Editável por cliente.
+    role: z
+      .string()
+      .min(1)
+      .max(200)
+      .default("um SDR consultivo especializado em pós-graduações médicas"),
+    // Tom das respostas.
+    tone: z.enum(["formal", "informal", "consultivo"]).default("consultivo"),
+    // Contexto do produto/serviço: cursos, preços, condições. A IA só fala o que
+    // estiver aqui — nunca inventa. Vazio = sem dados de produto (respostas genéricas).
+    productInfo: z.string().max(2000).default(""),
+    // Objetivo da conversa / próximo passo que a IA deve buscar.
+    goal: z.string().max(300).default("qualificar o lead e conduzir para agendamento"),
+    // Instruções extras do cliente (regras, proibições, FAQ curto).
+    instructions: z.string().max(2000).default(""),
+    // Se a IA pode informar preços/condições diretamente ao lead.
+    canQuotePrice: z.boolean().default(false),
+    // Máximo de turnos antes de sugerir escalada (reservado p/ uso futuro).
     maxTurns: z.number().int().min(1).max(50).default(12),
   })
   .strict();
