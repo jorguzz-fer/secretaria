@@ -90,6 +90,12 @@ const MIGRATIONS = [
     name: "0017_appointment",
     check: `SELECT COUNT(*)::int AS cnt FROM information_schema.tables WHERE table_schema='public' AND table_name='Appointment'`,
   },
+  {
+    // Checa a coluna `embedding` (não só a tabela): garante que a extensão
+    // vector + coluna pgvector foram aplicadas, não só o CREATE TABLE.
+    name: "0018_course",
+    check: `SELECT COUNT(*)::int AS cnt FROM information_schema.columns WHERE table_schema='public' AND table_name='Course' AND column_name='embedding'`,
+  },
 ];
 
 /**
