@@ -28,6 +28,11 @@ const updateUserRoleSchema = z.object({
   role: z.enum(["ADMIN", "SUPERVISOR", "ANALYST", "VIEWER"]),
 });
 
+const resetPasswordSchema = z.object({
+  userId: z.string().cuid(),
+  newPassword: z.string().min(10).max(200),
+});
+
 export async function updateTenantAction(
   _prev: ActionState,
   formData: FormData
@@ -137,6 +142,51 @@ export async function updateUserRoleAction(
 
   revalidatePath("/configuracoes");
   return { success: `Role de ${target.name} atualizado.` };
+}
+
+/**
+ * Reset de senha pelo admin: define uma nova senha para um usuário do tenant.
+ * Complementa o fluxo "esqueci a senha" (self-service) para casos em que o
+ * usuário travou o acesso. Nunca loga a senha — só o nome do alvo.
+ */
+export async function resetUserPasswordAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { session, error } = await requireRole(ROLES_ADMIN);
+  if (error) return { error: "Apenas administradores podem redefinir senhas" };
+
+  const parsed = resetPasswordSchema.safeParse({
+    userId: formData.get("userId"),
+    newPassword: formData.get("newPassword"),
+  });
+  if (!parsed.success) return { error: parsed.error.errors[0].message };
+
+  const { userId, newPassword } = parsed.data;
+  const passwordCheck = validatePassword(newPassword);
+  if (!passwordCheck.ok) return { error: passwordCheck.error! };
+
+  const tenantId = session!.user.tenantId;
+  const target = await prisma.user.findFirst({
+    where: { id: userId, tenantId },
+    select: { id: true, name: true },
+  });
+  if (!target) return { error: "Usuário não encontrado" };
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  await logAudit({
+    tenantId,
+    userId: session!.user.id,
+    action: "user.password_reset",
+    entity: "User",
+    entityId: userId,
+    meta: { name: target.name }, // nunca a senha
+  });
+
+  revalidatePath("/configuracoes");
+  return { success: `Senha de ${target.name} redefinida.` };
 }
 
 const updateTrackingConfigSchema = z.object({

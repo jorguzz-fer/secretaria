@@ -1,7 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { updateUserRoleAction, toggleUserActiveAction } from "@/app/actions/settings";
+import {
+  updateUserRoleAction,
+  toggleUserActiveAction,
+  resetUserPasswordAction,
+} from "@/app/actions/settings";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPERADMIN: "Super Admin",
@@ -86,6 +90,37 @@ function ToggleActiveButton({ user, currentUserId }: { user: User; currentUserId
   );
 }
 
+function ResetPasswordForm({ user }: { user: User }) {
+  const [state, action, pending] = useActionState(resetUserPasswordAction, null);
+
+  return (
+    <details className="inline-block text-left">
+      <summary className="cursor-pointer list-none rounded px-2 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50">
+        Senha
+      </summary>
+      <form action={action} className="mt-1 flex flex-col gap-1">
+        <input type="hidden" name="userId" value={user.id} />
+        <input
+          type="password"
+          name="newPassword"
+          placeholder="Nova senha (mín. 10)"
+          autoComplete="new-password"
+          className="w-44 rounded border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        >
+          {pending ? "Salvando..." : "Redefinir"}
+        </button>
+        {state && "error" in state && <span className="text-xs text-destructive">{state.error}</span>}
+        {state && "success" in state && <span className="text-xs text-green-600">{state.success}</span>}
+      </form>
+    </details>
+  );
+}
+
 export function UserTable({ users, currentUserId, isAdmin }: Props) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -130,7 +165,10 @@ export function UserTable({ users, currentUserId, isAdmin }: Props) {
               </td>
               {isAdmin && (
                 <td className="px-4 py-3 text-right">
-                  <ToggleActiveButton user={user} currentUserId={currentUserId} />
+                  <div className="flex items-start justify-end gap-2">
+                    <ResetPasswordForm user={user} />
+                    <ToggleActiveButton user={user} currentUserId={currentUserId} />
+                  </div>
                 </td>
               )}
             </tr>
