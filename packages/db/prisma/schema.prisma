@@ -45,6 +45,7 @@ model Tenant {
   campaignSpends   CampaignSpend[]
   modules          TenantModule[]
   appointments     Appointment[]
+  courses          Course[]
 
   @@index([slug])
 }
@@ -821,4 +822,30 @@ model CampaignSpend {
   @@unique([tenantId, platform, campaignId, date])
   @@index([tenantId, platform, date])
   @@index([tenantId, campaignId])
+}
+
+// ─── Catálogo de cursos (RAG híbrido: estrutural + pgvector) ──────────────────
+// A coluna `embedding vector(1536)` é criada na migration 0018 e lida/escrita
+// via SQL cru (pgvector não é tipo nativo do Prisma) — por isso não aparece aqui.
+model Course {
+  id          String   @id @default(cuid())
+  tenantId    String
+  number      Int? // Nº na planilha de origem
+  area        String // Categoria / Área (taxonomia do cliente)
+  title       String
+  workload    String? // carga horária (texto livre: "10 horas")
+  priceRaw    String? // "R$ 1.500,00 ou 10x R$ 150,00" | "GRATUITO"
+  priceBrl    Int? // menor valor total em reais (0 = gratuito, null = desconhecido) — filtro "até R$ X"
+  audience    String? // público-alvo
+  summary     String? // resumo
+  instructors String? // coordenação / instrutores
+  url         String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, area])
+  @@index([tenantId, active])
 }

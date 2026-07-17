@@ -66,3 +66,11 @@ export {
   schedulingInterpretInputSchema,
 } from "./assistants/scheduling";
 export type { SchedulingIntent, SchedulingInterpretInput } from "./assistants/scheduling";
+
+export {
+  embedText,
+  embedTexts,
+  embeddingsEnabled,
+  toVectorLiteral,
+  EMBEDDING_DIM,
+} from "./embeddings";

@@ -42,6 +42,11 @@ ADMIN_EMAIL="‹voce@dominio›" ADMIN_PASSWORD="‹senha forte›" \
 # Instância Z-API ↔ tenant
 ZAPI_INSTANCE_ID="‹id›" ZAPI_PHONE="‹+55DDDNUMERO›" \
   TENANT_SLUG="‹slug-do-tenant›" node apps/web/register-zapi-instance.js
+
+# Catálogo de cursos (RAG do SDR) — importa data/medicine-cursos.json.
+# Sem EMBEDDINGS_API_KEY, importa só estrutural (busca por área/preço funciona);
+# com a chave, calcula embeddings (busca semântica pgvector).
+TENANT_SLUG="‹slug-do-tenant›" node apps/web/import-courses.js
 ```
 
 ### Webhooks
@@ -73,7 +78,8 @@ openssl rand -hex 24      # CHATWOOT_WEBHOOK_SECRET
 | `AUTH_SECRET` | sim | `openssl rand -base64 32` |
 | `AUTH_URL` / `NEXT_PUBLIC_APP_URL` | sim | `https://‹DOMINIO›` |
 | `CONFIG_ENCRYPTION_KEY` | sim | 32 bytes base64 — cifra os segredos por tenant (Módulo 0) |
-| `OPENROUTER_API_KEY` | sim (IA) | openrouter.ai |
+| `OPENROUTER_API_KEY` | sim (IA) | openrouter.ai — chat do SDR |
+| `EMBEDDINGS_API_KEY` | não (RAG) | chave compatível-OpenAI p/ embeddings do catálogo (`EMBEDDINGS_BASE_URL`/`EMBEDDINGS_MODEL` opcionais). Sem ela, catálogo funciona só na busca estruturada |
 | `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | sim (automações) | inngest.com |
 | `ZAPI_INSTANCE_ID` / `ZAPI_INSTANCE_TOKEN` / `ZAPI_CLIENT_TOKEN` | sim (WhatsApp) | painel Z-API → Instância + Segurança |
 | `ZAPI_BASE_URL` | não | default `https://api.z-api.io` |

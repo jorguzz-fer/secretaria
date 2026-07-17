@@ -4,6 +4,7 @@ import { isModuleEnabled, getTenantConfig } from "@crm/config";
 import { inngest } from "../client";
 import { resolveWhatsappAdapter } from "../whatsapp-adapter";
 import { tryScheduling } from "./schedule";
+import { searchCourses, formatCoursesForPrompt } from "../courses";
 
 // Módulo do SDR (secretária) no registro de config. Desligado → não responde.
 const SDR_MODULE = "secretaria" as const;
@@ -124,6 +125,20 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
   // instruções. O generateReply monta o system prompt a partir disso.
   const sdrConfig = await getTenantConfig(tenantId, SDR_MODULE);
 
+  // RAG do catálogo: recupera os cursos relevantes à última mensagem do lead e
+  // injeta como productInfo (com 286 cursos não cabe tudo no prompt). Best-effort:
+  // qualquer falha mantém o productInfo estático da config.
+  let productInfo = sdrConfig.productInfo;
+  try {
+    const lastLead = [...history].reverse().find((m) => m.role === "lead");
+    if (lastLead) {
+      const hits = await searchCourses(tenantId, { query: lastLead.content, limit: 5 });
+      if (hits.length > 0) productInfo = formatCoursesForPrompt(hits);
+    }
+  } catch {
+    // mantém sdrConfig.productInfo
+  }
+
   const reply = await generateReply({
     tenantId,
     leadId: conversation.lead?.id,
@@ -135,7 +150,7 @@ export async function handleRespondOnMessage(eventData: RespondInput): Promise<R
       businessName: sdrConfig.businessName,
       role: sdrConfig.role,
       tone: sdrConfig.tone,
-      productInfo: sdrConfig.productInfo,
+      productInfo,
       goal: sdrConfig.goal,
       instructions: sdrConfig.instructions,
       canQuotePrice: sdrConfig.canQuotePrice,

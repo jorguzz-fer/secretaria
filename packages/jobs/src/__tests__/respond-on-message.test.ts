@@ -15,6 +15,11 @@ vi.mock("@crm/config", () => ({ isModuleEnabled: vi.fn(), getTenantConfig: vi.fn
 
 vi.mock("../functions/schedule", () => ({ tryScheduling: vi.fn() }));
 
+vi.mock("../courses", () => ({
+  searchCourses: vi.fn(async () => []),
+  formatCoursesForPrompt: vi.fn(() => ""),
+}));
+
 vi.mock("@crm/whatsapp", () => ({
   createEvolutionAdapter: vi.fn(() => ({
     provider: "evolution",

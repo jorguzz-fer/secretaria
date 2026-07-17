@@ -95,6 +95,18 @@ export default async function ConfiguracoesPage() {
             </div>
             <span className="text-muted-foreground group-hover:text-foreground transition-colors text-lg">→</span>
           </a>
+          <a
+            href="/configuracoes/cursos"
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-4 hover:bg-muted/30 transition-colors group"
+          >
+            <div>
+              <p className="font-medium text-sm">Catálogo de cursos</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Consulte os cursos que a IA usa para responder no WhatsApp (busca por área/preço)
+              </p>
+            </div>
+            <span className="text-muted-foreground group-hover:text-foreground transition-colors text-lg">→</span>
+          </a>
         </section>
       )}
 
