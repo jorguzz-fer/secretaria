@@ -56,6 +56,36 @@ async function resolveInboundLead(
   return { leadId: created.id, contactId: null };
 }
 
+/**
+ * Comando secreto de teste. Se `WHATSAPP_RESET_SECRET` estiver setado, exige
+ * `/reset <segredo>`; senão, aceita `/reset` puro (conveniência em dev).
+ */
+function isResetCommand(text: string | null): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  const secret = process.env.WHATSAPP_RESET_SECRET;
+  return secret ? t === `/reset ${secret.toLowerCase()}` : t === "/reset";
+}
+
+/**
+ * Zera o estado de teste de uma conversa: despausa a IA, apaga o histórico de
+ * mensagens e reseta a qualificação do lead (score/label/status). Escopo restrito
+ * à própria conversa + lead — para retestar a qualificação do zero no mesmo número.
+ */
+async function resetTestConversation(convId: string, leadId: string | null): Promise<void> {
+  await prisma.whatsAppMessage.deleteMany({ where: { conversationId: convId } });
+  await prisma.whatsAppConversation.update({
+    where: { id: convId },
+    data: { aiPaused: false, aiPausedReason: null, aiPausedAt: null, unreadCount: 0 },
+  });
+  if (leadId) {
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: { score: null, scoreLabel: null, scoreUpdatedAt: null, status: "NOVO" },
+    });
+  }
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const headers = Object.fromEntries(req.headers.entries());
@@ -154,6 +184,23 @@ export async function POST(req: Request) {
         instanceId_remoteJid: { instanceId: instance.id, remoteJid: `${phone}@s.whatsapp.net` },
       },
     });
+
+    // Comando secreto de teste: zera a conversa e NÃO aciona a IA.
+    const inboundText = msg.message.type === "text" ? msg.message.text : null;
+    if (isResetCommand(inboundText)) {
+      if (existingConv) await resetTestConversation(existingConv.id, existingConv.leadId);
+      await adapter.sendMessage({
+        tenantId: instance.tenantId,
+        providerInstanceId: detected.instanceKey,
+        toPhoneE164: msg.from.phoneE164,
+        content: {
+          type: "text",
+          text: "🔄 Teste reiniciado: IA reativada, histórico e qualificação zerados. Pode começar a conversa do início.",
+        },
+        externalEventId: `reset-${existingConv?.id ?? phone}-${msg.externalMessageId}`,
+      });
+      continue;
+    }
 
     let convId: string;
     let convLeadId: string | null = null;
