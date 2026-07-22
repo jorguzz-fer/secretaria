@@ -81,7 +81,8 @@ export function formatCoursesForPrompt(hits: CourseHit[]): string {
       if (c.workload) parts.push(`Carga horária: ${c.workload}`);
       if (c.priceRaw) parts.push(`Valor: ${c.priceRaw}`);
       if (c.audience) parts.push(`Público: ${c.audience}`);
-      if (c.summary) parts.push(c.summary);
+      // Enxuga o resumo pra não inflar o prompt (o catálogo tem resumos longos).
+      if (c.summary) parts.push(c.summary.length > 320 ? `${c.summary.slice(0, 317)}...` : c.summary);
       if (c.url) parts.push(`Link: ${c.url}`);
       return parts.join(" — ");
     })
