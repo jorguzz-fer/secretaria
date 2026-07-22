@@ -8,6 +8,7 @@ import {
 import { autoAssignLeadFn, reAssignHotLeadFn, handleAutoAssign, handleReAssignHot } from "./functions/auto-assign";
 import { respondOnMessageFn, handleRespondOnMessage } from "./functions/respond-on-message";
 import { escalateOnClassifiedFn, handleEscalateOnClassified } from "./functions/escalate-on-classified";
+import { qualifyOnClassifiedFn, handleQualifyOnClassified } from "./functions/qualify-on-classified";
 
 export { inngest } from "./client";
 export * from "./events";
@@ -27,6 +28,7 @@ export { followupSequenceFn, handleFollowup, resolveFollowupPlan };
 export { autoAssignLeadFn, reAssignHotLeadFn, handleAutoAssign, handleReAssignHot };
 export { respondOnMessageFn, handleRespondOnMessage };
 export { escalateOnClassifiedFn, handleEscalateOnClassified };
+export { qualifyOnClassifiedFn, handleQualifyOnClassified };
 
 export const functions = [
   classifyOnMessageFn,
@@ -36,4 +38,5 @@ export const functions = [
   reAssignHotLeadFn,
   respondOnMessageFn,
   escalateOnClassifiedFn,
+  qualifyOnClassifiedFn,
 ];
