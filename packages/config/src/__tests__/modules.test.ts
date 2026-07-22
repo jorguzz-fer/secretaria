@@ -121,8 +121,10 @@ describe("SecretariaConfigSchema (persona SDR)", () => {
     expect(() => SecretariaConfigSchema.parse({ foo: "bar" })).toThrow();
   });
 
-  it("limita tamanho de productInfo/instructions", () => {
+  it("limita tamanho de productInfo (2000) e instructions (6000)", () => {
     expect(() => SecretariaConfigSchema.parse({ productInfo: "x".repeat(2001) })).toThrow();
-    expect(() => SecretariaConfigSchema.parse({ instructions: "x".repeat(2001) })).toThrow();
+    expect(() => SecretariaConfigSchema.parse({ instructions: "x".repeat(6001) })).toThrow();
+    // instructions aceita o system prompt completo (≤ 6000)
+    expect(SecretariaConfigSchema.parse({ instructions: "x".repeat(5000) }).instructions.length).toBe(5000);
   });
 });

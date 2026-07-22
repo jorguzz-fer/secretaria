@@ -56,8 +56,9 @@ export const SecretariaConfigSchema = z
     productInfo: z.string().max(2000).default(""),
     // Objetivo da conversa / próximo passo que a IA deve buscar.
     goal: z.string().max(300).default("qualificar o lead e conduzir para agendamento"),
-    // Instruções extras do cliente (regras, proibições, FAQ curto).
-    instructions: z.string().max(2000).default(""),
+    // Instruções extras do cliente (regras, tom, políticas, FAQ). Cabe o
+    // system prompt do atendente (identidade, diretrizes, info geral, limites).
+    instructions: z.string().max(6000).default(""),
     // Se a IA pode informar preços/condições diretamente ao lead.
     canQuotePrice: z.boolean().default(false),
     // Máximo de turnos antes de sugerir escalada (reservado p/ uso futuro).
