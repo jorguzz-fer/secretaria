@@ -75,6 +75,24 @@ describe("classificationSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("aceita rationale longo (>280) — evita falha do generateObject", () => {
+    const ok = classificationSchema.safeParse({
+      classification: "hot",
+      confidence: 0.9,
+      rationale: "j".repeat(600),
+      recommendedNextAction: "route_to_human",
+    });
+    expect(ok.success).toBe(true);
+    // ainda há teto (1000) para não aceitar texto arbitrariamente grande
+    const tooBig = classificationSchema.safeParse({
+      classification: "hot",
+      confidence: 0.9,
+      rationale: "j".repeat(1001),
+      recommendedNextAction: "route_to_human",
+    });
+    expect(tooBig.success).toBe(false);
+  });
 });
 
 describe("classifyLead (Fase 2)", () => {

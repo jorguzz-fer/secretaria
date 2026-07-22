@@ -38,7 +38,10 @@ export type ClassifierInput = z.infer<typeof classifierInputSchema>;
 export const classificationSchema = z.object({
   classification: z.enum(["hot", "warm", "cold", "unqualified"]),
   confidence: z.number().min(0).max(1),
-  rationale: z.string().min(1).max(280),
+  // Limite generoso: o modelo às vezes gera justificativa > 280, e o
+  // generateObject rejeita + reintenta por minutos, travando a classificação
+  // (e o gatilho HOT). Mantém o campo curto no prompt, mas com folga no schema.
+  rationale: z.string().min(1).max(1000),
   recommendedNextAction: z.enum([
     "route_to_human",
     "send_pricing",
@@ -77,7 +80,7 @@ AÇÃO RECOMENDADA:
 - followup_later: agendar follow-up (cold)
 - archive: arquivar (unqualified)
 
-Retorne JSON com: classification, confidence [0.0-1.0], rationale (≤280 chars), recommendedNextAction, signals.`;
+Retorne JSON com: classification, confidence [0.0-1.0], rationale (justificativa concisa, ≤400 caracteres), recommendedNextAction, signals.`;
 
 function buildClassifierPrompt(input: ClassifierInput): string {
   const lines: string[] = [];
