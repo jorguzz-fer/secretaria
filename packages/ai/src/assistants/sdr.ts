@@ -77,9 +77,11 @@ export const sdrPersonaSchema = z.object({
   businessName: z.string().max(80).optional(),
   role: z.string().min(1).max(200),
   tone: z.enum(["formal", "informal", "consultivo"]),
-  productInfo: z.string().max(2000).optional(),
+  // productInfo recebe os cursos recuperados pelo RAG (vários, com resumos) —
+  // teto alto pra não estourar. instructions casa com o limite da config (6000).
+  productInfo: z.string().max(12000).optional(),
   goal: z.string().max(300).optional(),
-  instructions: z.string().max(2000).optional(),
+  instructions: z.string().max(6000).optional(),
   canQuotePrice: z.boolean(),
 });
 export type SdrPersona = z.infer<typeof sdrPersonaSchema>;
