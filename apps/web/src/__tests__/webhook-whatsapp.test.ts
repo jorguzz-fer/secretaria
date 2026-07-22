@@ -5,22 +5,23 @@ vi.mock("@/lib/db", () => ({
   prisma: {
     whatsAppInstance: { findUnique: vi.fn(), update: vi.fn() },
     whatsAppConversation: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
-    whatsAppMessage: { create: vi.fn() },
-    lead: { findFirst: vi.fn(), create: vi.fn() },
+    whatsAppMessage: { create: vi.fn(), deleteMany: vi.fn() },
+    lead: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
     contact: { findFirst: vi.fn() },
   },
 }));
 
-const { detectProviderMock, handleWebhookMock } = vi.hoisted(() => ({
+const { detectProviderMock, handleWebhookMock, sendMessageMock } = vi.hoisted(() => ({
   detectProviderMock: vi.fn(),
   handleWebhookMock: vi.fn(),
+  sendMessageMock: vi.fn(),
 }));
 
 vi.mock("@crm/whatsapp", () => ({
   detectProvider: detectProviderMock,
   handleWebhook: handleWebhookMock,
-  createZapiAdapter: vi.fn(() => ({ provider: "zapi" })),
-  createEvolutionAdapter: vi.fn(() => ({ provider: "evolution" })),
+  createZapiAdapter: vi.fn(() => ({ provider: "zapi", sendMessage: sendMessageMock })),
+  createEvolutionAdapter: vi.fn(() => ({ provider: "evolution", sendMessage: sendMessageMock })),
 }));
 
 const { inngestSendMock } = vi.hoisted(() => ({ inngestSendMock: vi.fn() }));
@@ -72,6 +73,9 @@ beforeEach(() => {
   lead.create.mockResolvedValue({ id: "lead-new" } as never);
   contact.findFirst.mockResolvedValue(null);
   msg.create.mockResolvedValue({} as never);
+  msg.deleteMany.mockResolvedValue({ count: 0 } as never);
+  lead.update.mockResolvedValue({} as never);
+  sendMessageMock.mockResolvedValue({} as never);
 });
 
 describe("POST /api/webhooks/whatsapp — z-api ReceivedCallback", () => {
@@ -180,5 +184,64 @@ describe("POST /api/webhooks/whatsapp — z-api ReceivedCallback", () => {
         data: expect.objectContaining({ tenantId: "tenant-1", conversationId: "conv-1" }),
       }),
     );
+  });
+});
+
+describe("comando secreto /reset", () => {
+  const resetMsg = { ...inboundMsg, message: { type: "text" as const, text: "/reset" } };
+
+  beforeEach(() => {
+    handleWebhookMock.mockResolvedValue({ status: 200, messages: [resetMsg] });
+  });
+
+  it("conversa existente: apaga histórico, despausa e reseta o lead — sem IA", async () => {
+    conv.findUnique.mockResolvedValueOnce({
+      id: "conv-existente",
+      leadId: "lead-1",
+      contactId: null,
+      remoteName: "Ana",
+      unreadCount: 5,
+      aiPaused: true,
+    } as never);
+
+    await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
+
+    expect(msg.deleteMany).toHaveBeenCalledWith({ where: { conversationId: "conv-existente" } });
+    expect(conv.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "conv-existente" },
+        data: expect.objectContaining({ aiPaused: false }),
+      }),
+    );
+    expect(lead.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "lead-1" },
+        data: expect.objectContaining({ score: null, scoreLabel: null, status: "NOVO" }),
+      }),
+    );
+    // confirma por mensagem e NÃO aciona a IA
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ content: { type: "text", text: expect.stringContaining("reiniciado") } }),
+    );
+    expect(inngestSendMock).not.toHaveBeenCalled();
+    expect(msg.create).not.toHaveBeenCalled();
+  });
+
+  it("número sem conversa: só confirma, nada a resetar, sem IA", async () => {
+    conv.findUnique.mockResolvedValueOnce(null);
+    await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
+    expect(msg.deleteMany).not.toHaveBeenCalled();
+    expect(sendMessageMock).toHaveBeenCalled();
+    expect(inngestSendMock).not.toHaveBeenCalled();
+  });
+
+  it("com WHATSAPP_RESET_SECRET setado, /reset puro NÃO dispara (segue como msg normal)", async () => {
+    process.env.WHATSAPP_RESET_SECRET = "abc";
+    conv.findUnique.mockResolvedValueOnce(null);
+    await POST(req({ type: "ReceivedCallback", phone: "5511989940404" }));
+    // sem o segredo correto, /reset é tratado como mensagem normal → cria conversa + dispara IA
+    expect(msg.deleteMany).not.toHaveBeenCalled();
+    expect(inngestSendMock).toHaveBeenCalled();
+    delete process.env.WHATSAPP_RESET_SECRET;
   });
 });
